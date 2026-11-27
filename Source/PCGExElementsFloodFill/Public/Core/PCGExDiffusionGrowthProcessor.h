@@ -231,6 +231,8 @@ namespace PCGExFloodFill
 			// Parallel: without claiming or shared capture state, diffusions cannot interact -- lockstep
 			// interleaving buys nothing, so each diffusion runs to completion in a single pass.
 			bGrowthRunToCompletion = !FillControlsHandler->InfluencesCount && !FillControlsHandler->bHasCaptureNotify;
+			// Claiming diffusions step in seed order on one thread, so who takes a contested vtx never depends on timing.
+			this->bForceSingleThreadedProcessRange = FillControlsHandler->InfluencesCount.IsValid();
 
 			while (!OngoingDiffusions.IsEmpty())
 			{

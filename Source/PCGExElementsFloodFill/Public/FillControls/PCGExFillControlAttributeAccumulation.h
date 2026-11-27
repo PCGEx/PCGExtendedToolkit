@@ -65,10 +65,6 @@ struct FPCGExFillControlConfigAttributeAccumulation : public FPCGExFillControlCo
 
 #pragma endregion
 
-	/** Store accumulated value in FCandidate::AccumulatedValue for use by other controls. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, AdvancedDisplay, meta = (PCG_NotOverridable))
-	bool bWriteToAccumulatedValue = true;
-
 #if WITH_EDITOR
 	void ApplyDeprecation();
 	void RenamePins(const UPCGSettings* InSettings, UPCGNode* InOutNode) const;
@@ -103,7 +99,6 @@ protected:
 	TSharedPtr<PCGExDetails::TSettingValue<double>> MaxAccumulation;
 	EPCGExClusterElement AttributeSource = EPCGExClusterElement::Vtx;
 	EPCGExAccumulationMode Mode = EPCGExAccumulationMode::Sum;
-	bool bWriteToAccumulatedValue = true;
 
 	double ComputeAccumulation(double PreviousAccumulated, double NewValue, int32 Depth) const;
 };

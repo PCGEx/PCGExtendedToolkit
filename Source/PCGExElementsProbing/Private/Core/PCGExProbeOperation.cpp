@@ -8,6 +8,7 @@
 #include "Core/PCGExProbingCandidates.h"
 #include "Data/PCGExData.h"
 #include "Details/PCGExSettingsDetails.h"
+#include "Helpers/PCGExArrayHelpers.h"
 
 #if WITH_EDITOR
 void FPCGExProbeConfigBase::ApplyDeprecation()
@@ -77,6 +78,22 @@ void FPCGExProbeOperation::ProcessNode(const int32 Index, TSet<uint64>* Coincide
 
 void FPCGExProbeOperation::ProcessAll(TSet<uint64>& OutEdges) const
 {
+}
+
+void FPCGExProbeOperation::ForEachPointDomain(TFunctionRef<void(TConstArrayView<int32>)> InProcessDomain) const
+{
+	if (ConfinedGroups)
+	{
+		for (const TArray<int32>& Group : *ConfinedGroups)
+		{
+			InProcessDomain(Group);
+		}
+		return;
+	}
+
+	TArray<int32> AllPoints;
+	PCGExArrayHelpers::ArrayOfIndices(AllPoints, WorkingPositions->Num());
+	InProcessDomain(AllPoints);
 }
 
 double FPCGExProbeOperation::GetSearchRadiusRaw(const int32 Index) const

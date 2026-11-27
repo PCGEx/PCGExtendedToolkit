@@ -51,6 +51,12 @@ public:
 		return !bAccumulate;
 	}
 
+	// A single sample is the edge itself: the walk only adds history from the second sample on.
+	virtual bool UsesTravelHistory() const override
+	{
+		return bAccumulate && MaxSamples > 1;
+	}
+
 	virtual void PrepareForCluster(const TSharedPtr<const PCGExClusters::FCluster>& InCluster) override;
 
 	virtual double GetGlobalScore(const PCGExClusters::FNode& From, const PCGExClusters::FNode& Seed, const PCGExClusters::FNode& Goal) const override;

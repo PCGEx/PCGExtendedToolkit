@@ -116,6 +116,19 @@ namespace PCGExPCGDataAssetCollectionInternal
 		}
 	}
 
+	// External storage nulls a slot's hard ref on save; this brings the externalized collection back.
+	void LoadBackExternalSlots(TArray<FPCGExExportCollectionSlot>& Slots)
+	{
+		for (FPCGExExportCollectionSlot& Slot : Slots)
+		{
+			if (!Slot.Collection && !Slot.External.IsNull())
+			{
+				PCGExHelpers::LoadBlocking_AnyThreadTpl(Slot.External);
+				Slot.Collection = Slot.External.Get();
+			}
+		}
+	}
+
 	/** Compute combined bounds from all spatial data in a PCGDataAsset. */
 	FBox ComputeBoundsFromAsset(const UPCGDataAsset* Asset)
 	{
@@ -318,14 +331,7 @@ bool FPCGExPCGDataAssetCollectionEntry::ExportFromSource(const UPCGExAssetCollec
 	// and EntryIds are bound by external references (variants). Cold external sessions load the
 	// externalized assets back. The slot refs stay assigned during export so the objects stay
 	// GC-reachable.
-	for (FPCGExExportCollectionSlot& Slot : EmbeddedSlots)
-	{
-		if (!Slot.Collection && !Slot.External.IsNull())
-		{
-			PCGExHelpers::LoadBlocking_AnyThreadTpl(Slot.External);
-			Slot.Collection = Slot.External.Get();
-		}
-	}
+	PCGExPCGDataAssetCollectionInternal::LoadBackExternalSlots(EmbeddedSlots);
 	ExportContext.EmbeddedSlots = &EmbeddedSlots;
 
 	const bool bSuccess = Exporter->ExportLevelData(ExportSource, ExportedDataAsset, ExportContext);
@@ -440,6 +446,18 @@ void FPCGExPCGDataAssetCollectionEntry::UpdateStaging(const UPCGExAssetCollectio
 				// An unreachable source keeps the last export, sockets included: the actor is usually
 				// unreachable only because its level is closed, and an empty module is worse than a
 				// stale one. A deleted actor is the author's to fix -- the warning names it.
+
+				// External storage nulls the hard refs on save: the host's rebuild needs the kept export live.
+				if (!ExportedDataAsset && !ExternalExportedDataAsset.IsNull())
+				{
+					PCGExHelpers::LoadBlocking_AnyThreadTpl(ExternalExportedDataAsset);
+					ExportedDataAsset = ExternalExportedDataAsset.Get();
+					if (ExportedDataAsset)
+					{
+						PCGExPCGDataAssetCollectionInternal::LoadBackExternalSlots(EmbeddedSlots);
+					}
+				}
+
 				UE_LOG(LogPCGEx, Warning,
 				       TEXT("Actor-sourced PCGDataAsset entry: %s -- %s."),
 				       *Failure, ExportedDataAsset ? TEXT("keeping the previous export") : TEXT("no previous export, entry stages nothing"));

@@ -94,7 +94,7 @@ namespace PCGExData
 			return false;
 		}
 
-		const FPCGMetadataAttributeBase* SourceAttribute = InData->Metadata->GetConstAttribute(PCGExMetaHelpers::GetAttributeIdentifier(FixedSelector, InData));
+		const FPCGMetadataAttributeBase* SourceAttribute = PCGExMetaHelpers::TryGetConstAttribute(InData->Metadata, PCGExMetaHelpers::GetAttributeIdentifier(FixedSelector, InData));
 		if (!SourceAttribute)
 		{
 			return false;

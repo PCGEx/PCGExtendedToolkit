@@ -252,7 +252,7 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Additional Outputs", meta=(PCG_Overridable, EditCondition="bWriteEntryType"))
 	FName EntryTypeAttributeName = FName("EntryType");
 
-	/** Update point scale so staged asset fits within its bounds */
+	/** How the picked entry's weight is written out: to the attribute below, or to point Density. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Additional Outputs", meta=(PCG_Overridable, EditCondition="SourceMode != EPCGExDistributeSourceMode::CollectionMap || RedistributionMode != EPCGExRedistributionMode::MicroCache", EditConditionHides))
 	EPCGExWeightOutputMode WeightToAttribute = EPCGExWeightOutputMode::NoOutput;
 
@@ -428,7 +428,7 @@ namespace PCGExAssetStaging
 		TArray<TSharedPtr<PCGExData::TBuffer<FSoftObjectPath>>> MaterialWriters; // Per valid slot writers
 
 		TArray<const FPCGExAssetCollectionEntry*> CachedPicks;
-		TArray<int8> MaterialPick;
+		TArray<int16> MaterialPick;
 
 		TSharedPtr<PCGExData::TBuffer<int64>> HashWriter;
 

@@ -19,7 +19,7 @@ TSharedPtr<FPCGExEntryPickerOperation> UPCGExSelectorFactoryData::CreateEntryOpe
 
 TSharedPtr<FPCGExMicroEntryPickerOperation> UPCGExSelectorFactoryData::CreateMicroOperation(FPCGExContext* InContext) const
 {
-	// Default dispatch on BaseConfig.EntrySelector.Distribution -- concrete main-mode
+	// Default dispatch on BaseConfig.SubDistribution.Distribution -- concrete main-mode
 	// factories rarely need to override this; it's shared across all built-in modes and
 	// user-authored factories that configure micro via the standard BaseConfig path.
 	switch (BaseConfig.SubDistribution.Distribution)

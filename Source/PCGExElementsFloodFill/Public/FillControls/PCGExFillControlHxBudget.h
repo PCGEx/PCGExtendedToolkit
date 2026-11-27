@@ -20,7 +20,7 @@ class UPCGNode;
 UENUM(BlueprintType)
 enum class EPCGExFloodFillBudgetSource : uint8
 {
-	PathScore UMETA(DisplayName = "Path Score", ToolTip = "Accumulated heuristic score along path"),
+	PathScore UMETA(DisplayName = "Path Score", ToolTip = "Accumulated heuristic score along path; accumulated edge length when no heuristics are connected"),
 	CompositeScore UMETA(DisplayName = "Composite Score", ToolTip = "Total combined score"),
 	PathDistance UMETA(DisplayName = "Path Distance", ToolTip = "Accumulated spatial distance"),
 };
@@ -139,6 +139,8 @@ public:
 		return PCGEX_NODE_COLOR_BLEND(FillControl, Heuristics);
 	}
 #endif
+	// Not culled when unwired: with no heuristics the budget is measured in path distance.
+	virtual bool CanCullTaskIfUnwired() const override { return false; }
 	//~End UPCGSettings
 
 protected:

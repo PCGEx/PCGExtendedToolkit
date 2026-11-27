@@ -37,7 +37,8 @@ public:
 	bool bEarlyExit = true;
 	PCGExClusters::FCluster* Cluster = nullptr;
 
-	virtual void PrepareForCluster(PCGExClusters::FCluster* InCluster);
+	/** Call once, before any query. InHeuristics must be the handler the queries are resolved with. */
+	virtual void PrepareForCluster(PCGExClusters::FCluster* InCluster, const TSharedPtr<PCGExHeuristics::FHandler>& InHeuristics);
 	virtual bool ResolveQuery(
 		const TSharedPtr<PCGExPathfinding::FPathQuery>& InQuery,
 		const TSharedPtr<PCGExPathfinding::FSearchAllocations>& Allocations,

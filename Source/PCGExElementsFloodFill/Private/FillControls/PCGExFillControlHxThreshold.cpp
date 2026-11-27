@@ -56,6 +56,11 @@ bool FPCGExFillControlHeuristicsThreshold::PrepareForDiffusions(FPCGExContext* I
 		InHandler->EdgeDataFacade,
 		TypedFactory->HeuristicsFactories);
 
+	if (!HeuristicsHandler->IsValidHandler())
+	{
+		return false;
+	}
+
 	HeuristicsHandler->PrepareForCluster(InHandler->Cluster);
 	HeuristicsHandler->CompleteClusterPreparation();
 	// Diffusion re-scores candidates throughout the fill -- always worth baking static edge scores.

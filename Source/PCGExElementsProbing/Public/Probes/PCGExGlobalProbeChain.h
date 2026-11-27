@@ -56,8 +56,9 @@ public:
 	TSharedPtr<PCGExData::TBuffer<double>> SortBuffer;
 
 protected:
-	void ComputeHilbertOrder(TArray<int32>& OutOrder) const;
-	void ComputeGreedyTSPOrder(TArray<int32>& OutOrder) const;
+	void ProcessDomain(TConstArrayView<int32> Points, TSet<uint64>& OutEdges) const;
+	void ComputeHilbertOrder(TConstArrayView<int32> Points, TArray<int32>& OutOrder) const;
+	void ComputeGreedyTSPOrder(TConstArrayView<int32> Points, TArray<int32>& OutOrder) const;
 };
 
 // Factory classes...

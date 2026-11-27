@@ -58,6 +58,15 @@ bool FPCGExProbeTensor::RequiresChainProcessing() const
 	return Config.bDoChainedProcessing;
 }
 
+TSharedPtr<PCGExMT::FScopedContainer> FPCGExProbeTensor::GetScopedContainer(const PCGExMT::FScope& InScope) const
+{
+	if (!Config.bDoChainedProcessing)
+	{
+		return nullptr;
+	}
+	return MakeShared<PCGExProbeTensor::FScopedContainer>(InScope);
+}
+
 bool FPCGExProbeTensor::Prepare(FPCGExContext* InContext)
 {
 	if (!TensorFactories)
@@ -87,9 +96,7 @@ void FPCGExProbeTensor::ProcessCandidates(const int32 Index, TArray<PCGExProbing
 {
 	bool bIsAlreadyConnected;
 	const double R = GetSearchRadius(Index);
-	double BestDot = -1;
-	double BestDist = TNumericLimits<double>::Max();
-	int32 BestCandidateIndex = -1;
+	PCGExProbing::FBestCandidate Best;
 
 	bool bSuccess = false;
 	const PCGExTensor::FTensorSample Sample = TensorsHandler->Sample(Index, *(WorkingTransforms->GetData() + Index), bSuccess);
@@ -100,26 +107,15 @@ void FPCGExProbeTensor::ProcessCandidates(const int32 Index, TArray<PCGExProbing
 	}
 
 	const FVector Dir = Sample.DirectionAndSize.GetSafeNormal() * Mirror;
-	const int32 MaxIndex = Candidates.Num() - 1;
-	for (int i = 0; i <= MaxIndex; i++)
+	const int32 NumCandidates = Candidates.Num();
+	for (int32 i = 0; i < NumCandidates; i++)
 	{
-		const int32 LocalIndex = bUseBestDot ? MaxIndex - i : i;
-		const PCGExProbing::FCandidate& C = Candidates[LocalIndex];
+		const PCGExProbing::FCandidate& C = Candidates[i];
 
-		// When using best dot, we need to process the candidates backward, so can't break the loop.
-		if (bUseBestDot)
+		// Candidates are sorted nearest-first.
+		if (C.Distance > R)
 		{
-			if (C.Distance > R)
-			{
-				continue;
-			}
-		}
-		else
-		{
-			if (C.Distance > R)
-			{
-				break;
-			}
+			break;
 		}
 
 		if (Coincidence && Coincidence->Contains(C.GH))
@@ -146,20 +142,12 @@ void FPCGExProbeTensor::ProcessCandidates(const int32 Index, TArray<PCGExProbing
 		}
 
 
-		if (Dot >= BestDot)
-		{
-			if (C.Distance < BestDist)
-			{
-				BestDist = C.Distance;
-				BestDot = Dot;
-				BestCandidateIndex = LocalIndex;
-			}
-		}
+		Best.ConsiderDirectional(i, C, Dot, bUseBestDot);
 	}
 
-	if (BestCandidateIndex != -1)
+	if (Best.BestIndex != -1)
 	{
-		const PCGExProbing::FCandidate& C = Candidates[BestCandidateIndex];
+		const PCGExProbing::FCandidate& C = Candidates[Best.BestIndex];
 
 		if (Coincidence)
 		{
@@ -179,25 +167,34 @@ void FPCGExProbeTensor::PrepareBestCandidate(const int32 Index, PCGExProbing::FB
 	InBestCandidate.BestIndex = -1;
 	InBestCandidate.BestPrimaryValue = -1;
 	InBestCandidate.BestSecondaryValue = TNumericLimits<double>::Max();
+
+	// New seed: its sample is taken by the first in-radius candidate.
+	Container->Reset();
 }
 
 void FPCGExProbeTensor::ProcessCandidateChained(const int32 Index, const int32 CandidateIndex, PCGExProbing::FCandidate& Candidate, PCGExProbing::FBestCandidate& InBestCandidate, PCGExMT::FScopedContainer* Container)
 {
-	const double R = GetSearchRadius(Index);
-	bool bSuccess = false;
-	const PCGExTensor::FTensorSample Sample = TensorsHandler->Sample(Index, *(WorkingTransforms->GetData() + Index), bSuccess);
-
-	if (!bSuccess)
+	if (Candidate.Distance > GetSearchRadius(Index))
 	{
 		return;
 	}
 
-	const FVector Dir = Sample.DirectionAndSize.GetSafeNormal() * Mirror;
+	// The sample only depends on the seed: one per seed, not one per candidate.
+	PCGExProbeTensor::FScopedContainer* SeedSample = static_cast<PCGExProbeTensor::FScopedContainer*>(Container);
+	if (!SeedSample->bSampled)
+	{
+		SeedSample->bSampled = true;
+		SeedSample->bSuccess = false;
+		const PCGExTensor::FTensorSample Sample = TensorsHandler->Sample(Index, *(WorkingTransforms->GetData() + Index), SeedSample->bSuccess);
+		SeedSample->Direction = Sample.DirectionAndSize.GetSafeNormal() * Mirror;
+	}
 
-	if (Candidate.Distance > R)
+	if (!SeedSample->bSuccess)
 	{
 		return;
 	}
+
+	const FVector& Dir = SeedSample->Direction;
 
 	double Dot = 0;
 	if (Config.bUseComponentWiseAngle)
@@ -217,24 +214,7 @@ void FPCGExProbeTensor::ProcessCandidateChained(const int32 Index, const int32 C
 		}
 	}
 
-	if (bUseBestDot)
-	{
-		if (Dot >= InBestCandidate.BestPrimaryValue)
-		{
-			if (Candidate.Distance < InBestCandidate.BestSecondaryValue)
-			{
-				InBestCandidate.BestSecondaryValue = Candidate.Distance;
-				InBestCandidate.BestPrimaryValue = Dot;
-				InBestCandidate.BestIndex = CandidateIndex;
-			}
-		}
-	}
-	else if (Candidate.Distance < InBestCandidate.BestSecondaryValue)
-	{
-		InBestCandidate.BestSecondaryValue = Candidate.Distance;
-		InBestCandidate.BestPrimaryValue = Dot;
-		InBestCandidate.BestIndex = CandidateIndex;
-	}
+	InBestCandidate.ConsiderDirectional(CandidateIndex, Candidate, Dot, bUseBestDot);
 }
 
 void FPCGExProbeTensor::ProcessBestCandidate(const int32 Index, PCGExProbing::FBestCandidate& InBestCandidate, TArray<PCGExProbing::FCandidate>& Candidates, TSet<uint64>* Coincidence, const FVector& ST, TSet<uint64>* OutEdges, PCGExMT::FScopedContainer* Container)

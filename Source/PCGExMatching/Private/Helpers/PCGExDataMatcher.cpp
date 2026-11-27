@@ -15,6 +15,8 @@
 #define LOCTEXT_NAMESPACE "PCGExCreateMatchRule"
 #define PCGEX_NAMESPACE CreateMatchRule
 
+#pragma region FScope
+
 PCGExMatching::FScope::FScope(const int32 InNumCandidates, const bool bUnlimited)
 {
 	NumCandidates = InNumCandidates;
@@ -34,8 +36,12 @@ void PCGExMatching::FScope::Invalidate()
 	FPlatformAtomics::InterlockedExchange(&Valid, false);
 }
 
+#pragma endregion
+
 namespace PCGExMatching
 {
+#pragma region FDataMatcher
+
 	FDataMatcher::FDataMatcher()
 	{
 		MatchableSources = MakeShared<TArray<FPCGExTaggedData>>();
@@ -130,6 +136,19 @@ namespace PCGExMatching
 		for (int i = 0; i < InMatchableSources.Num(); i++)
 		{
 			RegisterTaggedData(nullptr, InMatchableSources[i]->Source->GetTaggedData(PCGExData::EIOSide::In, i));
+		}
+		return InitInternal(InFactories);
+	}
+
+	bool FDataMatcher::Init(
+		const TArray<TObjectPtr<const UPCGExMatchRuleFactoryData>>& InFactories,
+		const TArray<FPCGExTaggedData>& InMatchableSources,
+		const bool bThrowError)
+	{
+		MatchableSources->Reserve(InMatchableSources.Num());
+		for (const FPCGExTaggedData& TaggedData : InMatchableSources)
+		{
+			RegisterTaggedData(nullptr, TaggedData);
 		}
 		return InitInternal(InFactories);
 	}
@@ -575,6 +594,129 @@ namespace PCGExMatching
 
 		return true;
 	}
+
+#pragma endregion
+
+#pragma region FChainReach
+
+	bool FChainReach::Init(
+		const TSharedRef<const FDataMatcher>& InTargets,
+		const TArray<TObjectPtr<const UPCGExMatchRuleFactoryData>>& InRules,
+		const TArray<FPCGExTaggedData>& InPool)
+	{
+		Targets = InTargets;
+		MaxHops = InTargets->WantsRecursion() ? InTargets->GetMaxRecursionDepth() : 0;
+
+		TArray<FPCGExTaggedData> UniquePool;
+		UniquePool.Reserve(InPool.Num());
+		PoolIndices.Reserve(InPool.Num());
+		for (const FPCGExTaggedData& Entry : InPool)
+		{
+			if (!PoolIndices.Contains(Entry.Data))
+			{
+				PoolIndices.Add(Entry.Data, UniquePool.Num());
+				UniquePool.Add(Entry);
+			}
+		}
+
+		Pool = MakeShared<FDataMatcher>();
+		Pool->SetDetails(InTargets->GetDetails());
+		if (!Pool->Init(InRules, UniquePool, false))
+		{
+			return false;
+		}
+
+		const TArray<FPCGExTaggedData>& PoolSources = Pool->GetSources();
+		const int32 NumPool = PoolSources.Num();
+		Hops.Init(INDEX_NONE, NumPool);
+
+		TArray<int32> Frontier;
+		Frontier.Reserve(NumPool);
+		for (int32 i = 0; i < NumPool; i++)
+		{
+			if (MatchesAnyTarget(PoolSources[i]))
+			{
+				Hops[i] = 0;
+				Frontier.Add(i);
+			}
+		}
+
+		// Breadth-first, so each entry keeps its fewest hops -- the depth limit is checked against them.
+		TArray<int32> Next;
+		Next.Reserve(NumPool);
+		for (int32 Depth = 1; !Frontier.IsEmpty() && CanExtend(Depth - 1); Depth++)
+		{
+			for (const int32 Reached : Frontier)
+			{
+				for (int32 i = 0; i < NumPool; i++)
+				{
+					if (Hops[i] != INDEX_NONE)
+					{
+						continue;
+					}
+
+					FScope Scope(NumPool, true);
+					if (Pool->Test(PoolSources[Reached].Data, PoolSources[i], Scope))
+					{
+						Hops[i] = Depth;
+						Next.Add(i);
+					}
+				}
+			}
+
+			Swap(Frontier, Next);
+			Next.Reset();
+		}
+
+		return true;
+	}
+
+	bool FChainReach::Reaches(const FPCGExTaggedData& InCandidate) const
+	{
+		if (const int32* PoolIndex = PoolIndices.Find(InCandidate.Data))
+		{
+			return Hops[*PoolIndex] != INDEX_NONE;
+		}
+
+		if (MatchesAnyTarget(InCandidate))
+		{
+			return true;
+		}
+
+		const TArray<FPCGExTaggedData>& PoolSources = Pool->GetSources();
+		for (int32 i = 0; i < Hops.Num(); i++)
+		{
+			if (Hops[i] == INDEX_NONE || !CanExtend(Hops[i]))
+			{
+				continue;
+			}
+
+			FScope Scope(Hops.Num(), true);
+			if (Pool->Test(PoolSources[i].Data, InCandidate, Scope))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	bool FChainReach::MatchesAnyTarget(const FPCGExTaggedData& InCandidate) const
+	{
+		const TArray<FPCGExTaggedData>& TargetSources = Targets->GetSources();
+		for (const FPCGExTaggedData& Target : TargetSources)
+		{
+			FScope Scope(TargetSources.Num(), true);
+			if (Targets->Test(Target.Data, InCandidate, Scope))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+#pragma endregion
 }
 
 #undef LOCTEXT_NAMESPACE

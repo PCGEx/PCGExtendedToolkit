@@ -46,10 +46,10 @@ bool FPCGExFillControlAttributeThreshold::PrepareForDiffusions(FPCGExContext* In
 		? InHandler->VtxDataFacade
 		: InHandler->EdgeDataFacade;
 
-	AttributeBuffer = SourceFacade->GetReadable<double>(TypedFactory->Config.Attribute.GetName());
+	AttributeBuffer = SourceFacade->GetBroadcaster<double>(TypedFactory->Config.Attribute);
 	if (!AttributeBuffer)
 	{
-		PCGEX_LOG_INVALID_ATTR_C(InContext, Attribute Threshold, TypedFactory->Config.Attribute.GetName())
+		PCGEX_LOG_INVALID_SELECTOR_C(InContext, Attribute Threshold, TypedFactory->Config.Attribute)
 		return false;
 	}
 
@@ -106,7 +106,7 @@ void UPCGExFillControlsFactoryAttributeThreshold::RegisterBuffersDependencies(FP
 	// Register the attribute we'll read
 	if (Config.AttributeSource == EPCGExClusterElement::Vtx)
 	{
-		FacadePreloader.Register<double>(InContext, Config.Attribute.GetName());
+		FacadePreloader.Register<double>(InContext, Config.Attribute);
 	}
 	// Edge attributes handled differently
 }

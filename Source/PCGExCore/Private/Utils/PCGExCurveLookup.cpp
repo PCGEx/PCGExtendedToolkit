@@ -206,15 +206,16 @@ void FPCGExCurveFloatLookup::Init(const FRuntimeFloatCurve& InCurve, const EPCGE
 
 	const int32 Count = FMath::Max(InNumSamples, 32);
 
-	// Allocate Count + 1 so Hi index is always safe without branch
-	LUT.SetNumUninitialized(Count + 1);
-	LUTMaxIdx = static_cast<float>(Count - 1);
+	// Same layout as the transform bake: Count + 2 entries, duplicated tail, LUTMaxIdx = Count.
+	LUT.SetNumUninitialized(Count + 2);
+	LUTMaxIdx = static_cast<float>(Count);
 
 	for (int32 i = 0; i <= Count; i++)
 	{
 		const float T = TimeMin + (static_cast<float>(i) / static_cast<float>(Count)) * TimeDelta;
 		LUT[i] = CurvePtr->Eval(T);
 	}
+	LUT[Count + 1] = LUT[Count];
 }
 
 void FPCGExCurveFloatLookup::Init(const FRuntimeFloatCurve& InCurve, const TFunctionRef<float(float)> InSampleTransform, const int32 InNumSamples)

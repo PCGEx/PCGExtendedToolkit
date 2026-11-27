@@ -99,15 +99,26 @@ bool FPCGExCollectionToModuleInfosElement::AdvanceWork(FPCGExContext* InContext,
 	UPCGParamData* OutputModules = FPCGContext::NewObject_AnyThread<UPCGParamData>(InContext);
 	UPCGMetadata* Metadata = OutputModules->Metadata;
 
+	// No overwrite on a type mismatch: two outputs sharing a name would delete an attribute an earlier typed pointer still holds.
+	auto CancelOnSharedName = [&](const FName InName)
+	{
+		return InContext->CancelExecution(FString::Printf(TEXT("Two module info outputs use the attribute name '%s' with different types."), *InName.ToString()));
+	};
+
 #define PCGEX_DECLARE_ATT(_NAME, _TYPE, _GETTER, _DEFAULT) \
-	FPCGMetadataAttribute<_TYPE>* _NAME##Attribute = nullptr; \
-	PCGEX_VALIDATE_NAME(Settings->_NAME##AttributeName) _NAME##Attribute = Metadata->FindOrCreateAttribute<_TYPE>(PCGExMetaHelpers::GetAttributeIdentifier(Settings->_NAME##AttributeName, OutputModules), _DEFAULT, false, true);
+	PCGEX_VALIDATE_NAME_C_RET(InContext, Settings->_NAME##AttributeName, InContext->CancelExecution()) \
+	FPCGMetadataAttribute<_TYPE>* _NAME##Attribute = Metadata->FindOrCreateAttribute<_TYPE>(PCGExMetaHelpers::GetAttributeIdentifier(Settings->_NAME##AttributeName, OutputModules), _DEFAULT, false, true, false); \
+	if (!_NAME##Attribute) { return CancelOnSharedName(Settings->_NAME##AttributeName); }
 	PCGEX_FOREACH_MODULE_FIELD(PCGEX_DECLARE_ATT);
 #undef PCGEX_DECLARE_ATT
 
 	const FName EntryIdxAttributeName = Settings->GetEntryIdxAttributeName();
-	PCGEX_VALIDATE_NAME(EntryIdxAttributeName)
-	FPCGMetadataAttribute<int64>* EntryAttribute = Metadata->FindOrCreateAttribute<int64>(PCGExMetaHelpers::GetAttributeIdentifier(EntryIdxAttributeName, OutputModules), 0, false, true);
+	PCGEX_VALIDATE_NAME_C_RET(InContext, EntryIdxAttributeName, InContext->CancelExecution())
+	FPCGMetadataAttribute<int64>* EntryAttribute = Metadata->FindOrCreateAttribute<int64>(PCGExMetaHelpers::GetAttributeIdentifier(EntryIdxAttributeName, OutputModules), 0, false, true, false);
+	if (!EntryAttribute)
+	{
+		return CancelOnSharedName(EntryIdxAttributeName);
+	}
 
 	TSet<FName> UniqueSymbols;
 	UniqueSymbols.Reserve(100);

@@ -55,7 +55,8 @@ PCGEx also has a small ecosystem of more uniquely targeted plugins that build on
 
 → **[PCGEx + ZoneGraph](https://pcgex.gitbook.io/pcgex/zone-graph)**  •  Generate ZoneGraph roads & polygons from clusters  
 → **[PCGEx + Valency](https://pcgex.gitbook.io/pcgex/valency)**  •  Constraint solving pipeline (WFC + free-form connector grammar)  
-→ **[PCGEx + Cluster Sketch](https://pcgex.gitbook.io/pcgex/cluster-sketch)**  •  Create clusters by hand with per-element data layers
+→ **[PCGEx + Cluster Sketch](https://pcgex.gitbook.io/pcgex/cluster-sketch)**  •  Create clusters by hand with per-element data layers  
+→ **[PCGEx + Landscape](https://pcgex.gitbook.io/pcgex/landscape)**  •  Flexible PCG <-> Landscape interop (editor only)
 
 --- 
 

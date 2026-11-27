@@ -3,10 +3,13 @@
 
 #include "Filters/Points/PCGExDataMatchFilter.h"
 
+#include "Core/PCGExMatchRuleFactoryProvider.h"
 #include "Data/PCGExData.h"
 #include "Data/PCGExPointIO.h"
+#include "Factories/PCGExFactories.h"
 #include "Helpers/PCGExDataMatcher.h"
 #include "Helpers/PCGExMatchingHelpers.h"
+#include "Misc/ScopeRWLock.h"
 
 #define LOCTEXT_NAMESPACE "PCGExDataMatchFilterDefinition"
 #define PCGEX_NAMESPACE DataMatchFilterDefinition
@@ -46,7 +49,82 @@ PCGExFactories::EPreparationResult UPCGExDataMatchFilterFactory::Prepare(FPCGExC
 		return PCGExFactories::EPreparationResult::MissingData;
 	}
 
+	if (Config.bChainThroughFilteredData)
+	{
+		if (DataMatcher->WantsRecursion())
+		{
+			PCGExFactories::GetInputFactories(InContext, PCGExMatching::Labels::SourceMatchRulesLabel, ChainRules, {FPCGExDataTypeInfoMatchRule::AsId()}, false);
+		}
+		else if (!Config.bQuietChainWarnings)
+		{
+			PCGE_LOG_C(Warning, GraphAndLog, InContext, FTEXT("Chain Through Filtered Data has no effect: no match rule is recursive."));
+		}
+	}
+
 	return Super::Prepare(InContext, TaskManager);
+}
+
+TSharedPtr<const PCGExMatching::FChainReach> UPCGExDataMatchFilterFactory::GetChainReach(FPCGExContext* InContext, const TSharedPtr<PCGExData::FPointIOCollection>& InFilteredData) const
+{
+	using FChainEntry = TPair<TWeakPtr<PCGExData::FPointIOCollection>, TSharedPtr<const PCGExMatching::FChainReach>>;
+
+	{
+		FReadScopeLock ReadScope(ChainReachLock);
+		for (const FChainEntry& Entry : ChainReaches)
+		{
+			if (Entry.Key.Pin() == InFilteredData)
+			{
+				return Entry.Value;
+			}
+		}
+	}
+
+	TSharedPtr<PCGExMatching::FChainReach> ChainReach;
+
+	{
+		FWriteScopeLock WriteScope(ChainReachLock);
+
+		// Weak keys: a new collection at a dead one's address can't match its entry. Drop the dead ones while here.
+		ChainReaches.RemoveAll([](const FChainEntry& Entry) { return !Entry.Key.IsValid(); });
+		for (const FChainEntry& Entry : ChainReaches)
+		{
+			if (Entry.Key.Pin() == InFilteredData)
+			{
+				return Entry.Value;
+			}
+		}
+
+		TArray<FPCGExTaggedData> FilteredData;
+		FilteredData.Reserve(InFilteredData->Num());
+		for (const TSharedPtr<PCGExData::FPointIO>& IO : InFilteredData->Pairs)
+		{
+			FilteredData.Add(IO->GetTaggedData());
+		}
+
+		ChainReach = MakeShared<PCGExMatching::FChainReach>();
+		if (!ChainReach->Init(DataMatcher.ToSharedRef(), ChainRules, FilteredData))
+		{
+			ChainReach.Reset();
+		}
+
+		ChainReaches.Emplace(InFilteredData, ChainReach);
+	}
+
+	// Only the call that built the entry gets here, so each filtered collection warns once.
+	if (!ChainReach && !Config.bQuietChainWarnings)
+	{
+		PCGE_LOG_C(Warning, GraphAndLog, InContext, FTEXT("Chain Through Filtered Data can't chain these inputs: a match rule rejects one of them as a target (a missing attribute, for instance). Only direct matches count."));
+	}
+
+	return ChainReach;
+}
+
+void UPCGExDataMatchFilterFactory::WarnChainsUnavailable(FPCGExContext* InContext) const
+{
+	if (!Config.bQuietChainWarnings && !bWarnedChainsUnavailable.exchange(true))
+	{
+		PCGE_LOG_C(Warning, GraphAndLog, InContext, FTEXT("Chain Through Filtered Data needs a node that filters whole data; only direct matches count here."));
+	}
 }
 
 #pragma endregion
@@ -66,13 +144,13 @@ bool PCGExPointFilter::FDataMatchFilter::Init(FPCGExContext* InContext, const TS
 		return true;
 	}
 
-	const FPCGExTaggedData Candidate = InPointDataFacade->Source->GetTaggedData();
-	PCGExMatching::FScope Scope(TypedFilterFactory->DataMatcher->GetNumSources(), true);
+	// Collection hosts chain through Test(IO, ParentCollection) instead.
+	if (!HostCollection && !bWillBeUsedWithCollections && TypedFilterFactory->WantsChains())
+	{
+		TypedFilterFactory->WarnChainsUnavailable(InContext);
+	}
 
-	TArray<int32> Matches;
-	TypedFilterFactory->DataMatcher->GetMatchingSourcesIndices(Candidate, Scope, Matches);
-
-	const bool bResult = !Matches.IsEmpty();
+	const bool bResult = Matches(*InPointDataFacade->Source, HostCollection);
 	bCollectionTestResult = TypedFilterFactory->Config.bInvert ? !bResult : bResult;
 
 	return true;
@@ -90,14 +168,28 @@ bool PCGExPointFilter::FDataMatchFilter::Test(const TSharedPtr<PCGExData::FPoint
 		return !TypedFilterFactory->Config.bInvert;
 	}
 
-	const FPCGExTaggedData Candidate = IO->GetTaggedData();
+	const bool bResult = Matches(*IO, ParentCollection);
+	return TypedFilterFactory->Config.bInvert ? !bResult : bResult;
+}
+
+bool PCGExPointFilter::FDataMatchFilter::Matches(PCGExData::FPointIO& InIO, const TSharedPtr<PCGExData::FPointIOCollection>& InFilteredData) const
+{
+	const FPCGExTaggedData Candidate = InIO.GetTaggedData();
+
+	if (InFilteredData && TypedFilterFactory->WantsChains())
+	{
+		if (const TSharedPtr<const PCGExMatching::FChainReach> ChainReach = TypedFilterFactory->GetChainReach(InIO.GetContext(), InFilteredData))
+		{
+			return ChainReach->Reaches(Candidate);
+		}
+	}
+
 	PCGExMatching::FScope Scope(TypedFilterFactory->DataMatcher->GetNumSources(), true);
 
-	TArray<int32> Matches;
-	TypedFilterFactory->DataMatcher->GetMatchingSourcesIndices(Candidate, Scope, Matches);
+	TArray<int32> MatchedSources;
+	TypedFilterFactory->DataMatcher->GetMatchingSourcesIndices(Candidate, Scope, MatchedSources);
 
-	const bool bResult = !Matches.IsEmpty();
-	return TypedFilterFactory->Config.bInvert ? !bResult : bResult;
+	return !MatchedSources.IsEmpty();
 }
 
 #pragma endregion
@@ -123,6 +215,11 @@ FString UPCGExDataMatchFilterProviderSettings::GetDisplayName() const
 {
 	FString DisplayName = TEXT("Data Match : ");
 	DisplayName += Config.Mode == EPCGExMapMatchMode::All ? TEXT("All") : TEXT("Any");
+
+	if (Config.bChainThroughFilteredData)
+	{
+		DisplayName += TEXT(" (Chained)");
+	}
 
 	return PCGExCommon::FlagInvertLabel(DisplayName, Config.bInvert);
 }

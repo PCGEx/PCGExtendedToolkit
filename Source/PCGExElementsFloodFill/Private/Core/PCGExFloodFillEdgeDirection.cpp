@@ -64,8 +64,9 @@ void FPCGExFloodFillEdgeDirectionDetails::WriteFromNodeDepths(const PCGExCluster
 {
 	check(WritePtr); // Callers gate on IsActive().
 
-	TArray<PCGExGraphs::FEdge>& Edges = *InCluster->Edges;
-	for (PCGExGraphs::FEdge& Edge : Edges)
+	// Each edge is sorted as a copy: the cluster's edges can be shared with other consumers of a cached cluster.
+	const TArray<PCGExGraphs::FEdge>& Edges = *InCluster->Edges;
+	for (PCGExGraphs::FEdge Edge : Edges)
 	{
 		const int32 StartNode = InCluster->GetEdgeStart(Edge)->Index;
 		const int32 EndNode = InCluster->GetEdgeEnd(Edge)->Index;

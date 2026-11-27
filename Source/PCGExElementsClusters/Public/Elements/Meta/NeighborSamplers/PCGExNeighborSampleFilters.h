@@ -34,7 +34,7 @@ struct FPCGExSamplerFilterConfig
 	bool bNormalizeInsideNum = false;
 
 	/** Write the count of neighbors that failed filters to an attribute. */
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, InlineEditConditionToggle, InlineEditConditionToggle))
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, InlineEditConditionToggle))
 	bool bWriteOutsideNum = false;
 
 	/** Name of the attribute to write the number of tests that failed (outside filters) */
@@ -58,7 +58,7 @@ struct FPCGExSamplerFilterConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, InlineEditConditionToggle))
 	bool bWriteInsideWeight = false;
 
-	/** Name of the attribute to write the number of tests weight that passed (inside filters) */
+	/** Name of the attribute to write the summed weight of neighbors that passed (inside filters) */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName = "Inside Weight", EditCondition="bWriteInsideWeight"))
 	FName InsideWeightAttributeName = FName(FName("InsideWeight"));
 
@@ -71,7 +71,7 @@ struct FPCGExSamplerFilterConfig
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, InlineEditConditionToggle))
 	bool bWriteOutsideWeight = false;
 
-	/** Name of the attribute to write the number of tested weight that passed (inside filters) */
+	/** Name of the attribute to write the summed weight of neighbors that failed (outside filters) */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = Settings, meta=(PCG_Overridable, DisplayName = "Outside Weight", EditCondition="bWriteOutsideWeight"))
 	FName OutsideWeightAttributeName = FName(FName("OutsideWeight"));
 
@@ -123,7 +123,7 @@ protected:
 	TSharedPtr<PCGExData::TBuffer<double>> NormalizedWeightOutsideBuffer;
 
 	TSharedPtr<PCGExData::TBuffer<int32>> TotalNumBuffer;
-	TSharedPtr<PCGExData::TBuffer<int32>> TotalWeightBuffer;
+	TSharedPtr<PCGExData::TBuffer<double>> TotalWeightBuffer;
 };
 
 UCLASS(MinimalAPI, BlueprintType, ClassGroup = (Procedural), Category="PCGEx|Data")

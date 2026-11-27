@@ -53,8 +53,9 @@ namespace PCGExProbing
 	 * per-phase steps directly - keeping the completion/ordering contract in one place.
 	 *
 	 * With a group constraint (EEdgeRelation != Any), radius-based probes exclude non-matching
-	 * candidates at gathering time (so "closest"-style probes re-pick), while direct & global probe
-	 * outputs are post-filtered on accumulation - those probes name explicit targets and cannot re-pick.
+	 * candidates at gathering time (so "closest"-style probes re-pick). Under SameGroup, global probes
+	 * run once per group, as if each group were the whole input. Direct probes, and global probes under
+	 * any other relation, are post-filtered on accumulation: they name explicit targets and cannot re-pick.
 	 */
 	class PCGEXELEMENTSPROBING_API FProbingEngine : public TSharedFromThis<FProbingEngine>
 	{
@@ -100,6 +101,9 @@ namespace PCGExProbing
 		TArray<FPCGExProbeOperation*> SharedOperations;
 		TArray<FPCGExProbeOperation*> GlobalOperations;
 
+		// Each SameGroup group's point indices, ascending; what confined global probes iterate.
+		TArray<TArray<int32>> ConfinedGroups;
+
 		int32 NumRadiusSources = 0;
 		int32 NumDirectOps = 0;
 		int32 NumChainedOps = 0;
@@ -137,6 +141,8 @@ namespace PCGExProbing
 		bool HasGlobalWork() const { return !GlobalOperations.IsEmpty(); }
 
 		void PrepareWorkingData();
+		/** Under SameGroup, buckets points by group and hands the buckets to every global probe. */
+		void ConfineGlobalProbes();
 		void PrepareScopes(const TArray<PCGExMT::FScope>& Loops);
 		void ProcessScope(const PCGExMT::FScope& Scope);
 		void CollapseScopedEdges();

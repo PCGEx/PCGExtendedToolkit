@@ -20,6 +20,7 @@ struct PCGEXCOLLECTIONS_API FPCGExCollectionsSettingsCache
 	TSubclassOf<UObject> DefaultContentFilterClass;
 	TSubclassOf<UObject> DefaultBoundsEvaluatorClass;
 	TSubclassOf<UObject> DefaultMeshClassificatorClass;
+	TSubclassOf<UObject> DefaultSplineClassificatorClass;
 
 	/** Combined set of actor class names treated as system/infrastructure: hardcoded baseline
 	 *  in UPCGExActorContentFilter::KnownSystemActorClasses, plus runtime registrations, plus

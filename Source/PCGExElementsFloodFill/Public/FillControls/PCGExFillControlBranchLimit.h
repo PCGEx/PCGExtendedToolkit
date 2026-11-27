@@ -84,12 +84,16 @@ protected:
 	bool bConstantBudget = false;
 	int32 ConstantBudget = 0;
 
-	// Captured children per node (Prune + Vtx). Overlapping diffusions may write the same parent
-	// concurrently (Cluster : Diffuse has no claiming), so accessed atomically.
+	// Captured children per node (Prune + Vtx). Only when a node has a single capturing diffusion (claiming, or one diffusion).
 	TArray<int32> ChildCounts;
 
 	// Whether a node already has a child (Prune + Seed), as 0/1 for an atomic test-and-set. Fork tally: DiffusionForks.
+	// Same single-capturer condition as ChildCounts.
 	TArray<int32> ParentHasChild;
+
+	// Captured children per parent node, one map per diffusion; replaces both arrays above when diffusions overlap
+	// (no claiming, several diffusions). Each map is only touched by its own diffusion's thread.
+	TArray<TMap<int32, int32>> DiffusionChildCounts;
 
 	// Forks spent per diffusion (Seed, global budget). Indexed by diffusion; one writer per slot.
 	TArray<int32> DiffusionForks;

@@ -3,12 +3,14 @@
 
 #include "PCGExCollectionsEditorMenuUtils.h"
 
+#include "ContentBrowserMenuContexts.h"
 #include "Core/PCGExAssetCollection.h"
 #include "Details/Collections/PCGExCollectionEditorHelpers.h"
 #include "Details/Collections/PCGExCollectionEditorTypeRegistry.h"
 #include "Engine/Blueprint.h"
 #include "GameFramework/Actor.h"
 #include "Misc/ScopedSlowTask.h"
+#include "Styling/AppStyle.h"
 #include "UObject/SoftObjectPath.h"
 
 #define LOCTEXT_NAMESPACE "PCGEditorMenuUtils"
@@ -26,41 +28,67 @@ namespace PCGExCollectionsEditorMenuUtils
 		return *SectionPtr;
 	}
 
-	void CreateOrUpdatePCGExAssetCollectionsFromMenu(UToolMenu* Menu, TArray<FAssetData>& Assets)
+	void AddRebuildEntries(UToolMenu* Menu, const TArray<FAssetData>& CollectionAssets)
 	{
-		// Selections containing PCGEx collections can be merged into an Omni collection.
+		FToolMenuSection& Section = CreatePCGExSection(Menu);
+
+		const auto AddRebuildEntry = [&Section, &CollectionAssets](
+			const FName EntryName, const FText& Label, const FText& ToolTip, const FName IconName, const bool bIncludeSubCollections)
 		{
-			TArray<FAssetData> SelectedCollectionAssets;
-			for (const FAssetData& Asset : Assets)
-			{
-				if (Asset.IsInstanceOf<UPCGExAssetCollection>())
+			FToolUIAction RebuildAction;
+			RebuildAction.ExecuteAction.BindLambda(
+				[CollectionAssets, bIncludeSubCollections](const FToolMenuContext&)
 				{
-					SelectedCollectionAssets.Add(Asset);
-				}
-			}
+					PCGExCollectionEditorHelpers::RebuildCollections(CollectionAssets, bIncludeSubCollections);
+				});
 
-			if (!SelectedCollectionAssets.IsEmpty())
+			Section.AddMenuEntry(EntryName, Label, ToolTip, FSlateIcon(FAppStyle::GetAppStyleSetName(), IconName), RebuildAction);
+		};
+
+		const int32 NumSelected = CollectionAssets.Num();
+
+		AddRebuildEntry(
+			"RebuildPCGExCollectionsStaging",
+			LOCTEXT("RebuildStaging", "Rebuild Staging"),
+			FText::Format(
+				LOCTEXT("RebuildStagingTooltip", "Rebuild staging for the {0} selected {0}|plural(one=collection,other=collections). A selected subcollection is rebuilt before the collections holding it."),
+				NumSelected),
+			"PCGEx.ActionIcon.RebuildStaging",
+			/*bIncludeSubCollections=*/ false);
+
+		AddRebuildEntry(
+			"RebuildPCGExCollectionsStagingRecursive",
+			LOCTEXT("RebuildStagingRecursive", "Rebuild Staging (Recursive)"),
+			FText::Format(
+				LOCTEXT("RebuildStagingRecursiveTooltip", "Rebuild staging for the {0} selected {0}|plural(one=collection,other=collections) and every subcollection they reach, each once, subcollections first."),
+				NumSelected),
+			"PCGEx.ActionIcon.RebuildStagingRecursive",
+			/*bIncludeSubCollections=*/ true);
+	}
+
+	void AddMergeIntoOmniEntry(UToolMenu* Menu, const TArray<FAssetData>& CollectionAssets)
+	{
+		FToolMenuSection& Section = CreatePCGExSection(Menu);
+
+		FToolUIAction MergeAction;
+		MergeAction.ExecuteAction.BindLambda(
+			[CollectionAssets](const FToolMenuContext&)
 			{
-				FToolMenuSection& Section = CreatePCGExSection(Menu);
+				// Progress/result feedback is handled inside MergeCollectionsIntoOmni
+				// (a slow-task dialog here would fight the modal save dialog it opens).
+				PCGExCollectionEditorHelpers::MergeCollectionsIntoOmni(CollectionAssets);
+			});
 
-				FToolUIAction MergeAction;
-				MergeAction.ExecuteAction.BindLambda(
-					[SelectedCollectionAssets = MoveTemp(SelectedCollectionAssets)](const FToolMenuContext&)
-					{
-						// Progress/result feedback is handled inside MergeCollectionsIntoOmni
-						// (a slow-task dialog here would fight the modal save dialog it opens).
-						PCGExCollectionEditorHelpers::MergeCollectionsIntoOmni(SelectedCollectionAssets);
-					});
+		Section.AddMenuEntry(
+			"MergePCGExCollectionsIntoOmni",
+			TAttribute<FText>(FText::FromString(TEXT("Merge Collection(s) into Omni Collection"))),
+			TAttribute<FText>(FText::FromString(TEXT("Create (or pick) an Omni collection and append a copy of every entry from the selected collections. Collection-level globals carry over; sources are untouched."))),
+			FSlateIcon(FName("PCGExStyleSet"), "ClassIcon.PCGExAssetCollection"),
+			MergeAction);
+	}
 
-				Section.AddMenuEntry(
-					"MergePCGExCollectionsIntoOmni",
-					TAttribute<FText>(FText::FromString(TEXT("Merge Collection(s) into Omni Collection"))),
-					TAttribute<FText>(FText::FromString(TEXT("Create (or pick) an Omni collection and append a copy of every entry from the selected collections. Collection-level globals carry over; sources are untouched."))),
-					FSlateIcon(FName("PCGExStyleSet"), "ClassIcon.PCGExAssetCollection"),
-					MergeAction);
-			}
-		}
-
+	void AddCreateOrUpdateEntry(UToolMenu* Menu, const TArray<FAssetData>& Assets)
+	{
 		TArray<const FCollectionEditorTypeInfo*> AllInfos;
 		FCollectionEditorTypeRegistry::Get().GetAll(AllInfos);
 
@@ -166,6 +194,37 @@ namespace PCGExCollectionsEditorMenuUtils
 			TAttribute<FText>(FText::FromString(TEXT("If no Asset collection is part of the selection, will create new collections from the selected source assets. If any collection is part of the selection, the matching source assets will be added to it instead."))),
 			FSlateIcon(FName("PCGExStyleSet"), "ClassIcon.PCGExAssetCollection"),
 			UIAction);
+	}
+
+	void ExtendAssetActionsMenu(UToolMenu* Menu, const UContentBrowserAssetContextMenuContext& Context)
+	{
+		TArray<FAssetData> CollectionAssets;
+		TArray<FAssetData> ModifiableCollectionAssets;
+		for (const FAssetData& Asset : Context.SelectedAssets)
+		{
+			if (Asset.IsInstanceOf<UPCGExAssetCollection>())
+			{
+				CollectionAssets.Add(Asset);
+
+				// Rebuilding writes to them: the content browser's read-only test, per collection.
+				if (UPCGExAssetCollection::EDITOR_CanBeModified(Asset))
+				{
+					ModifiableCollectionAssets.Add(Asset);
+				}
+			}
+		}
+
+		if (!ModifiableCollectionAssets.IsEmpty())
+		{
+			AddRebuildEntries(Menu, ModifiableCollectionAssets);
+		}
+
+		if (!CollectionAssets.IsEmpty())
+		{
+			AddMergeIntoOmniEntry(Menu, CollectionAssets);
+		}
+
+		AddCreateOrUpdateEntry(Menu, Context.SelectedAssets);
 	}
 
 	bool DoesAssetInheritFromAActor(const FAssetData& AssetData)

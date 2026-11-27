@@ -1538,13 +1538,14 @@ namespace PCGExCollections
 		// Game thread only: TrackLevelRead ignores other threads.
 		TSet<FName> PendingPackages;
 		TMap<FName, int32> HeldPackages; // Still referenced at release time -> garbage collections left to wait for
+		TSet<FName> RetryPackages; // Held, queued again by a GC; tick-only: back-to-back batch flushes would spend every retry
 		FTSTicker::FDelegateHandle ReleaseTickerHandle;
 		FDelegateHandle PostGarbageCollectHandle;
 
 		// A holder lets go only at a garbage collection: a released streamable handle (a read, the warm resource cache
 		// past its TTL) leaves its item, and the world, in FStreamableManager until OnPreGarbageCollect, and an idle
 		// editor never collects on its own (UEngine::ConditionalCollectGarbage needs a world that has begun play). Held
-		// levels are rechecked after each of the next few collections; one still held after the last stays resident.
+		// levels are rechecked on the tick after each of the next few garbage collections; then they stay resident.
 		constexpr int32 MaxHeldRetries = 4;
 
 		bool ReleaseTick(float DeltaTime);
@@ -1573,8 +1574,8 @@ namespace PCGExCollections
 		{
 			if (!ReleaseTickerHandle.IsValid())
 			{
-				// Next tick: a batch (rebuild, restage flush) releases once, never from inside a load, a property edit or
-				// a garbage collection.
+				// Next tick: never from inside a load, a property edit or a garbage collection. A batch releases sooner,
+				// between collections, through FlushLevelReadReleases.
 				ReleaseTickerHandle = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateStatic(&ReleaseTick));
 			}
 		}
@@ -1588,7 +1589,7 @@ namespace PCGExCollections
 
 			TSet<FName> Held;
 			HeldPackages.GetKeys(Held);
-			PendingPackages.Append(Held);
+			RetryPackages.Append(Held);
 			ScheduleRelease();
 		}
 
@@ -1710,8 +1711,10 @@ namespace PCGExCollections
 		bool ReleaseTick(float DeltaTime)
 		{
 			ReleaseTickerHandle.Reset();
-			const TSet<FName> Batch = MoveTemp(PendingPackages);
+			TSet<FName> Batch = MoveTemp(PendingPackages);
 			PendingPackages.Reset();
+			Batch.Append(RetryPackages);
+			RetryPackages.Reset();
 			Release(Batch);
 			return false;
 		}
@@ -1751,6 +1754,40 @@ namespace PCGExCollections
 		return nullptr;
 	}
 
+	void FlushLevelReadReleases(const TSet<FName>* KeepPending)
+	{
+#if WITH_EDITOR
+		if (!ensure(IsInGameThread()) || LevelReadRelease::PendingPackages.IsEmpty())
+		{
+			return;
+		}
+
+		TSet<FName> Batch;
+		for (TSet<FName>::TIterator It = LevelReadRelease::PendingPackages.CreateIterator(); It; ++It)
+		{
+			if (!KeepPending || !KeepPending->Contains(*It))
+			{
+				Batch.Add(*It);
+				It.RemoveCurrent();
+			}
+		}
+
+		if (Batch.IsEmpty())
+		{
+			return;
+		}
+
+		// The tick stays scheduled only for what is kept or waits for a retry.
+		if (LevelReadRelease::PendingPackages.IsEmpty() && LevelReadRelease::RetryPackages.IsEmpty())
+		{
+			FTSTicker::RemoveTicker(LevelReadRelease::ReleaseTickerHandle);
+			LevelReadRelease::ReleaseTickerHandle.Reset();
+		}
+
+		LevelReadRelease::Release(Batch);
+#endif
+	}
+
 	void CancelPendingLevelReleases()
 	{
 #if WITH_EDITOR
@@ -1759,6 +1796,7 @@ namespace PCGExCollections
 		LevelReadRelease::BindPostGarbageCollect(false);
 		LevelReadRelease::PendingPackages.Reset();
 		LevelReadRelease::HeldPackages.Reset();
+		LevelReadRelease::RetryPackages.Reset();
 #endif
 	}
 }

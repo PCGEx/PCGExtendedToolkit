@@ -16,7 +16,11 @@ void FPCGExHeuristicTensor::PrepareForCluster(const TSharedPtr<const PCGExCluste
 {
 	FPCGExHeuristicOperation::PrepareForCluster(InCluster);
 	TensorsHandler = MakeShared<PCGExTensor::FTensorsHandler>(TensorHandlerDetails);
-	TensorsHandler->Init(Context, *TensorFactories, PrimaryDataFacade);
+	if (!TensorsHandler->Init(Context, *TensorFactories, PrimaryDataFacade))
+	{
+		// A handler that failed Init has no sampler: dropped, GetDot then scores like a failed sample.
+		TensorsHandler.Reset();
+	}
 }
 
 double FPCGExHeuristicTensor::GetGlobalScore(const PCGExClusters::FNode& From, const PCGExClusters::FNode& Seed, const PCGExClusters::FNode& Goal) const
@@ -31,6 +35,11 @@ double FPCGExHeuristicTensor::GetEdgeScore(const PCGExClusters::FNode& From, con
 
 double FPCGExHeuristicTensor::GetDot(const int32 InSeedIndex, const FVector& From, const FVector& To) const
 {
+	if (!TensorsHandler)
+	{
+		return 0;
+	}
+
 	bool bSuccess = false;
 	const PCGExTensor::FTensorSample Sample = TensorsHandler->Sample(InSeedIndex, FTransform(FRotationMatrix::MakeFromX((To - From).GetSafeNormal()).ToQuat(), From), bSuccess);
 	if (!bSuccess)

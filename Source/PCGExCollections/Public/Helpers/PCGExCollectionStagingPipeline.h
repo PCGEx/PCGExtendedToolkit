@@ -24,15 +24,18 @@ class UPCGExAssetCollection;
  * slots are skipped), so later pipelines observe earlier pipelines' mutations.
  *
  * Hook contract:
- *  - Fires for every editor rebuild session: toolbar Rebuild / Rebuild Recursive / Rebuild
- *    Project, single-entry restages (grid edits), stale-entry batches and property-edit
- *    triggered rebuilds. Pre/post fire once per session; OnProcessEntry fires once per
- *    restaged entry (Sanitize -> UpdateStaging -> PostUpdateStaging -> OnProcessEntry).
+ *  - Fires for every editor rebuild session: the collection editor's Rebuild / Rebuild Recursive /
+ *    Rebuild Project, the content browser's Rebuild Staging entries, single-entry restages (grid
+ *    edits), stale-entry batches and property-edit triggered rebuilds. Pre/post fire once per session;
+ *    OnProcessEntry fires once per restaged entry (Sanitize -> UpdateStaging -> PostUpdateStaging ->
+ *    OnProcessEntry).
  *  - OnPostRebuild fires every session, even when nothing changed (bHasChanges tells). On a changed
  *    session it runs AFTER the native EDITOR_OnPostStagingRebuild extension point (actor component
  *    schema merges, shared-collection compaction), so the pipeline gets final say.
- *  - Subcollections recursed into via the runtime RebuildStagingData do NOT run their own
- *    pipelines; only the collection whose editor rebuild was triggered dispatches hooks.
+ *  - A batch rebuild (Recursive, Project, Rebuild Staging) opens one session per collection,
+ *    subcollections included, so each runs its own pipelines. A collection whose OnPreRebuild adds
+ *    subcollection rows gets a second session once those are rebuilt. The runtime RebuildStagingData,
+ *    its recursion included, dispatches nothing.
  *  - Rebuilds triggered from inside a hook run WITHOUT re-firing hooks (no recursion).
  *  - Hooks never fire while cooking.
  *

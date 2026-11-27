@@ -362,7 +362,7 @@ namespace PCGExPathfindingEdges
 		}
 
 		SearchOperation = Context->SearchAlgorithm->CreateOperation(); // Create a local copy
-		SearchOperation->PrepareForCluster(Cluster.Get());
+		SearchOperation->PrepareForCluster(Cluster.Get(), HeuristicsHandler);
 
 		bForceSingleThreadedProcessRange = HeuristicsHandler->HasGlobalFeedback() || !Settings->bGreedyQueries;
 		if (bForceSingleThreadedProcessRange)

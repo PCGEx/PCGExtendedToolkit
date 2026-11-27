@@ -124,6 +124,14 @@ struct PCGEXELEMENTSTOPOLOGY_API FPCGExTopologyDetails
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Geometry Script", meta = (PCG_Overridable, EditCondition="bComputeNormals"))
 	FGeometryScriptCalculateNormalsOptions NormalsOptions;
 
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Geometry Script", meta = (PCG_Overridable, InlineEditConditionToggle))
+	bool bSplitNormals = false;
+
+	/** Keeps hard edges hard: normals are split along edges sharper than the opening angle, or between polygroups.
+	 *  Takes over Compute Normals and uses its options to weight the result. */
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Geometry Script", meta = (PCG_Overridable, EditCondition="bSplitNormals"))
+	FGeometryScriptSplitNormalsOptions SplitNormalsOptions;
+
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Geometry Script", meta = (PCG_Overridable))
 	bool bFlipNormals = false;
 

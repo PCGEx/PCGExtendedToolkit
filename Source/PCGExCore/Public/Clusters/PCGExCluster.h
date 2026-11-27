@@ -401,12 +401,14 @@ namespace PCGExClusters
 		/** Builds Nodes, their links and the node bounds from the already-populated Edges
 		 * array, writing NodeIndexLookup along the way. Requires the lookup to hold -1 for
 		 * every point index the edges reference; InNumNodesHint must be >= the number of
-		 * unique edge endpoints (it is used as allocation size by the parallel path). */
-		void BuildAdjacency_Unsafe(const int32 InNumNodesHint);
+		 * unique edge endpoints (it is used as allocation size by the parallel path).
+		 * False, with the build unusable, when another cluster's node holds one of the points. */
+		bool BuildAdjacency_Unsafe(const int32 InNumNodesHint);
 
 		/** Rebuilds Bounds from this cluster's own node positions, as the build paths do. */
 		void ComputeBounds();
 
+		/** INDEX_NONE when the point's lookup entry is another cluster's node. */
 		int32 GetOrCreateNode_Unsafe(const int32 PointIndex);
 	};
 }

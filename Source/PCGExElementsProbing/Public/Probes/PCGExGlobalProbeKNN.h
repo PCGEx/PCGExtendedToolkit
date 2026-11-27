@@ -52,6 +52,9 @@ public:
 
 	FPCGExProbeConfigKNN Config;
 	TSharedPtr<PCGExDetails::TSettingValue<int32>> K;
+
+protected:
+	void ProcessDomain(TConstArrayView<int32> Points, TSet<uint64>& OutEdges) const;
 };
 
 ////

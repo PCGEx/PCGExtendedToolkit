@@ -102,8 +102,8 @@ namespace PCGExProbing
 			{
 				// A constant radius ignores the index.
 				SharedCullDistance = WidenCullDistance(SharedCullDistance, NewOperation->GetSearchRadius(0));
+				SharedSearchRadius = FMath::Max(SharedSearchRadius, NewOperation->GetSearchRadiusRaw(0));
 			}
-			SharedSearchRadius = FMath::Max(SharedSearchRadius, NewOperation->BaseConfig->SearchRadius.Constant);
 
 			if (NewOperation->RequiresChainProcessing())
 			{
@@ -141,6 +141,7 @@ namespace PCGExProbing
 	{
 		OnCompleteFn = MoveTemp(InOnComplete);
 
+		ConfineGlobalProbes();
 		PrepareWorkingData();
 
 		// One pending decrement per phase; whichever finishes last collapses & fires the callback.
@@ -230,6 +231,35 @@ namespace PCGExProbing
 
 		CollapseScopedEdges();
 		OnCompleteFn();
+	}
+
+	void FProbingEngine::ConfineGlobalProbes()
+	{
+		if (!HasGlobalWork() || EdgeRelation != EEdgeRelation::SameGroup || !PointGroupIds)
+		{
+			return;
+		}
+
+		// Buckets follow first appearance, so the domain order is stable run to run. Ungrouped points (INDEX_NONE)
+		// form one bucket of their own, as the equality test of every other SameGroup filter treats them.
+		const TArray<int32>& GroupIds = *PointGroupIds;
+		TMap<int32, int32> GroupSlots;
+		for (int32 i = 0; i < NumPoints; i++)
+		{
+			int32& Slot = GroupSlots.FindOrAdd(GroupIds[i], INDEX_NONE);
+			if (Slot == INDEX_NONE)
+			{
+				Slot = ConfinedGroups.Num();
+				ConfinedGroups.AddDefaulted();
+			}
+			ConfinedGroups[Slot].Add(i);
+		}
+
+		for (FPCGExProbeOperation* Operation : GlobalOperations)
+		{
+			Operation->ConfinedGroupIds = PointGroupIds;
+			Operation->ConfinedGroups = &ConfinedGroups;
+		}
 	}
 
 	void FProbingEngine::PrepareWorkingData()

@@ -110,7 +110,7 @@ struct PCGEXELEMENTSTENSORS_API FPCGExTensorConfigBase
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Guide", meta = (PCG_NotOverridable, DisplayName="Guide Curve", EditCondition = "bUseLocalGuideCurve", EditConditionHides))
 	FRuntimeVectorCurve LocalGuideCurve;
 
-	/** Per-point Weight falloff curve sampled using distance to effector origin. */
+	/** Per-point Guide curve sampled using distance to effector origin. */
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Settings|Guide", meta=(PCG_Overridable, DisplayName="Guide Curve", EditCondition="!bUseLocalGuideCurve", EditConditionHides))
 	TObjectPtr<UCurveVector> GuideCurve;
 
@@ -325,6 +325,13 @@ namespace PCGExTensor
 		FTensorSample Flatten(double InWeight)
 		{
 			TensorSample.Effectors = Samples.Num();
+
+			// No net effector weight: nothing to average, the sample stays a zero direction at InWeight.
+			if (TensorSample.Weight == 0.0)
+			{
+				TensorSample.Weight = InWeight;
+				return TensorSample;
+			}
 
 			FVector DirectionAndSize = FVector::ZeroVector;
 

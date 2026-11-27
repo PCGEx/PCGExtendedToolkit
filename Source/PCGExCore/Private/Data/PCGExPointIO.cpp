@@ -724,7 +724,11 @@ for (int i = 0; i < ReducedNum; i++){Range[i] = Range[InIndices[i]];}}
 			const bool bOwnsForwarded = SharedContext.Get() && SharedContext.Get()->bWantsDataStealing;
 			if (!bOwnsForwarded)
 			{
-				UE_LOG(LogPCGEx, Warning, TEXT("DeleteAttribute('%s') skipped on forwarded input '%s': the input is not owned by this node (enable Steal Data or use a Duplicate output to remove it)."), *Identifier.Name.ToString(), *GetNameSafe(In));
+				FReadScopeLock ReadScopeLock(AttributesLock);
+				if (PCGExMetaHelpers::HasAttribute(Out->Metadata, Identifier))
+				{
+					UE_LOG(LogPCGEx, Warning, TEXT("DeleteAttribute('%s') skipped on forwarded input '%s': the input is not owned by this node (enable Steal Data or use a Duplicate output to remove it)."), *Identifier.Name.ToString(), *GetNameSafe(In));
+				}
 				return;
 			}
 		}
