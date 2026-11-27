@@ -71,7 +71,7 @@ namespace PCGExData
 			// Read from metadata directly so this works for any UPCGData with metadata (point/spatial AND attribute sets), not just spatial.
 			if (const UPCGMetadata* MetadataPtr = InData->ConstMetadata())
 			{
-				Attribute = MetadataPtr->GetConstAttribute(PCGExMetaHelpers::GetAttributeIdentifier(Selector, InData));
+				Attribute = PCGExMetaHelpers::TryGetConstAttribute(MetadataPtr, PCGExMetaHelpers::GetAttributeIdentifier(Selector, InData));
 				bIsDataDomain = Attribute ? Attribute->GetMetadataDomain()->GetDomainID().Flag == EPCGMetadataDomainFlag::Data : false;
 				bIsValid = Attribute ? true : false;
 			}
