@@ -6,10 +6,14 @@
 #include "ToolMenus.h"
 #include "AssetRegistry/AssetData.h"
 
+class UContentBrowserAssetContextMenuContext;
+
 namespace PCGExCollectionsEditorMenuUtils
 {
 	FToolMenuSection& CreatePCGExSection(UToolMenu* Menu);
-	void CreateOrUpdatePCGExAssetCollectionsFromMenu(UToolMenu* Menu, TArray<FAssetData>& Assets);
+
+	/** Adds the PCGEx entries of the content browser's Asset Actions submenu that apply to the selection in Context. */
+	void ExtendAssetActionsMenu(UToolMenu* Menu, const UContentBrowserAssetContextMenuContext& Context);
 
 	bool DoesAssetInheritFromAActor(const FAssetData& AssetData);
 }

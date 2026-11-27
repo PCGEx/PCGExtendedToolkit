@@ -103,6 +103,7 @@ namespace PCGExMatching
 
 		/** Init with pre-loaded match rule factories (no context needed for factory loading). */
 		bool Init(const TArray<TObjectPtr<const UPCGExMatchRuleFactoryData>>& InFactories, const TArray<TSharedPtr<PCGExData::FFacade>>& InMatchableSources, const bool bThrowError);
+		bool Init(const TArray<TObjectPtr<const UPCGExMatchRuleFactoryData>>& InFactories, const TArray<FPCGExTaggedData>& InMatchableSources, const bool bThrowError);
 
 		/** Data-level test: looks up MatchableSourceFirstElements[DataIndex] (always the first point).
 		 *  Use for static/collection-level matching (bCheckAgainstDataBounds). */
@@ -159,6 +160,17 @@ namespace PCGExMatching
 			return bWantsRecursion;
 		}
 
+		/** Smallest depth across recursive rules; -1 = unlimited. Only meaningful if WantsRecursion(). */
+		FORCEINLINE int32 GetMaxRecursionDepth() const
+		{
+			return MaxRecursionDepth;
+		}
+
+		FORCEINLINE const FPCGExMatchingDetails* GetDetails() const
+		{
+			return Details;
+		}
+
 	protected:
 		// Runs the rules against an already-resolved matchable element and registers the match in the scope.
 		bool TestRules(const PCGExData::FConstPoint& InMatchableElement, const FPCGExTaggedData& InDataCandidate, FScope& InMatchingScope) const;
@@ -169,5 +181,33 @@ namespace PCGExMatching
 		void RegisterTaggedData(FPCGExContext* InContext, const FPCGExTaggedData& InTaggedData);
 		bool InitInternal(FPCGExContext* InContext, const FName InFactoriesLabel);
 		bool InitInternal(const TArray<TObjectPtr<const UPCGExMatchRuleFactoryData>>& InFactories);
+	};
+
+	/** Which data of a pool reach a matcher's sources: directly, or -- when a rule wants recursion -- through a chain of
+	 *  other pool data, each hop tested with the data nearer the sources as the source side. Immutable once built. */
+	class PCGEXMATCHING_API FChainReach
+	{
+	protected:
+		TSharedPtr<const FDataMatcher> Targets;
+		TSharedPtr<FDataMatcher> Pool;
+		TMap<const UPCGData*, int32> PoolIndices;
+		TArray<int32> Hops; // Per pool source: recursion hops to a target (0 = direct match), INDEX_NONE if unreached.
+		int32 MaxHops = 0;  // -1 = unlimited
+
+	public:
+		/** InRules must be the rules InTargets was built from. Pool entries sharing a data collapse into the first one,
+		 *  since the matcher keys its sources by data. */
+		bool Init(const TSharedRef<const FDataMatcher>& InTargets, const TArray<TObjectPtr<const UPCGExMatchRuleFactoryData>>& InRules, const TArray<FPCGExTaggedData>& InPool);
+
+		/** Thread-safe once Init succeeded. A candidate outside the pool can still chain through a reached entry. */
+		bool Reaches(const FPCGExTaggedData& InCandidate) const;
+
+	protected:
+		bool MatchesAnyTarget(const FPCGExTaggedData& InCandidate) const;
+
+		FORCEINLINE bool CanExtend(const int32 InHops) const
+		{
+			return MaxHops < 0 || InHops < MaxHops;
+		}
 	};
 }

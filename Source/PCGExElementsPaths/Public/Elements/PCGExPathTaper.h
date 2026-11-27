@@ -4,6 +4,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Core/PCGExBlendOperations.h"
 #include "Core/PCGExPathProcessor.h"
 #include "Details/PCGExInputShorthandsDetails.h"
 #include "Math/PCGExMathMean.h"
@@ -32,6 +33,9 @@ enum class EPCGExPathTaperBlend : uint8
 	None     = 0 UMETA(DisplayName = "None", ToolTip="Replace the target's value with the taper value."),
 	Add      = 1 UMETA(DisplayName = "Add", ToolTip="Add the taper value to the target's current value."),
 	Multiply = 2 UMETA(DisplayName = "Multiply", ToolTip="Multiply the target's current value by the taper value."),
+	Subtract = 3 UMETA(DisplayName = "Subtract", ToolTip="Subtract the taper value from the target's current value."),
+	Min      = 4 UMETA(DisplayName = "Min", ToolTip="Keep the lower of the target's current value and the taper value."),
+	Max      = 5 UMETA(DisplayName = "Max", ToolTip="Keep the higher of the target's current value and the taper value."),
 };
 
 /**
@@ -123,6 +127,7 @@ struct FPCGExPathTaperContext final : FPCGExPathProcessorContext
 
 	PCGExFloatLUT StartCurve;
 	PCGExFloatLUT EndCurve;
+	PCGExBlending::FBlendFn BlendFn = nullptr;
 
 protected:
 	PCGEX_ELEMENT_BATCH_POINT_DECL
@@ -172,8 +177,8 @@ namespace PCGExPathTaper
 		// Reads the target's current value; set only while blending.
 		TSharedPtr<PCGExData::IBufferProxy> TargetReader;
 
-		// The settings' blend, or None when the target attribute doesn't exist yet.
-		EPCGExPathTaperBlend BlendMode = EPCGExPathTaperBlend::None;
+		// The context's blend, or null when the target attribute doesn't exist yet.
+		PCGExBlending::FBlendFn BlendFn = nullptr;
 
 		TArray<double> DistToStart;
 		double PathLength = 0;

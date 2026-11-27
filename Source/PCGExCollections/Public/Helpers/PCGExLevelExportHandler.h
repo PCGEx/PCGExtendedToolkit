@@ -4,18 +4,20 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "PCGData.h"
 #include "PCGExCollectionsCommon.h"
 #include "StructUtils/InstancedStruct.h"
 #include "Templates/SubclassOf.h"
 #include "UObject/Object.h"
+#include "UObject/StrongObjectPtr.h"
 
 #include "PCGExLevelExportHandler.generated.h"
 
 class AActor;
+class UActorComponent;
 class UPCGExAssetCollection;
 class UPCGExLevelDataExporter;
 class UPCGMetadata;
-class UStaticMeshComponent;
 struct FPCGExAssetCollectionEntry;
 struct FPCGExLevelExportSource;
 
@@ -26,7 +28,15 @@ enum class EPCGExExportSlotScope : uint8
 	Shared = 0,
 	/** One collection per PCGDataAsset entry, rebuilt from that entry's export alone (actors). */
 	PerEntry = 1,
+	/** No collection: each item carries its own data, emitted as is on the pin (splines). */
+	None = 2,
 };
+
+namespace PCGExLevelExport
+{
+	/** The slots one actor is classified into. More than one only for slots that take the actor apart. */
+	using FSlotSet = TArray<FName, TInlineAllocator<2>>;
+}
 
 namespace PCGExLevelExport::Slots
 {
@@ -34,9 +44,10 @@ namespace PCGExLevelExport::Slots
 	const FName Meshes = PCGExCollections::Labels::MeshesPin;
 	const FName Actors = PCGExCollections::Labels::ActorsPin;
 	const FName Levels = PCGExCollections::Labels::LevelsPin;
+	const FName Splines = PCGExCollections::Labels::SplinesPin;
 }
 
-/** What a handler contributes: the pin its points land on and the collection its entries live in. */
+/** What a handler contributes: the pin its output lands on and the collection, if any, its entries live in. */
 struct PCGEXCOLLECTIONS_API FPCGExExportSlotDesc
 {
 	/** Storage key on entries/state and external-asset suffix (<GUID>_<SlotId>). Stable forever. */
@@ -53,9 +64,21 @@ struct PCGEXCOLLECTIONS_API FPCGExExportSlotDesc
 	/** Local picks carry a secondary index (mesh material variants). */
 	bool bSupportsSecondary = false;
 
+	/**
+	 * The slot spawns its actors again (class + delta, level instance), components included: no other slot may
+	 * harvest them. False = the slot takes the actor apart and keeps only what it harvests.
+	 */
+	bool bRecreatesSource = false;
+
+	/** False for Scope None, which declares no collection class, entry struct or policy. */
+	bool HasCollection() const
+	{
+		return Scope != EPCGExExportSlotScope::None;
+	}
+
 	bool IsValid() const
 	{
-		return !SlotId.IsNone() && !PinName.IsNone() && CollectionClass && EntryStruct;
+		return !SlotId.IsNone() && !PinName.IsNone() && (HasCollection() ? (CollectionClass && EntryStruct) : (!CollectionClass && !EntryStruct));
 	}
 };
 
@@ -88,7 +111,10 @@ public:
 	}
 };
 
-/** One exported point. Transform is already in the export frame; bounds are point-local. */
+/**
+ * One exported point, or one datum of a slot without a collection. Transform is already in the export frame; bounds
+ * are point-local.
+ */
 struct PCGEXCOLLECTIONS_API FPCGExExportItem
 {
 	FTransform Transform = FTransform::Identity;
@@ -107,18 +133,24 @@ struct PCGEXCOLLECTIONS_API FPCGExExportItem
 	/** Secondary pick (material variant); -1 = none. Ignored unless the slot supports secondaries. */
 	int16 SecondaryIndex = -1;
 
-	/** Static mesh component the point was harvested from (Mesh handler); null = not a static mesh point. */
-	const UStaticMeshComponent* SourceComponent = nullptr;
+	/** Component the item was harvested from, when its handler records one (meshes, splines). */
+	const UActorComponent* SourceComponent = nullptr;
 
 	/** Instance of an instanced SourceComponent; INDEX_NONE for a plain static mesh component. */
 	int32 SourceInstanceIndex = INDEX_NONE;
+
+	/**
+	 * Slots without a collection: what the item emits, held alive by the item. The exporter emits its own copy and never
+	 * edits this one, which a registry function may share.
+	 */
+	TStrongObjectPtr<const UPCGData> Data;
 };
 
 /**
  * One actor offered to the harvest pass. A root -- the root of a subtree export, or any IPCGExAssemblyRoot
  * implementer met inside the export (a module cage in a level, a nested root actor) -- is never an entry
- * itself; every other candidate carries the slot that claimed it (a handler's Claim, else the exporter's
- * built-in classification).
+ * itself; every other candidate carries the slots that claimed it: its classification tags, else a handler's
+ * Claim, else the exporter's built-in classification.
  */
 struct PCGEXCOLLECTIONS_API FPCGExExportCandidate
 {
@@ -127,8 +159,25 @@ struct PCGEXCOLLECTIONS_API FPCGExExportCandidate
 	/** Never an entry: only its components are harvested. */
 	bool bIsRoot = false;
 
-	/** None for a root. */
-	FName ClaimedSlot = NAME_None;
+	/** Empty for a root without classification tags. */
+	PCGExLevelExport::FSlotSet ClaimedSlots;
+
+	/** A claiming slot spawns the actor again (FPCGExExportSlotDesc::bRecreatesSource). Never set on a root. */
+	bool bRecreated = false;
+
+	/** Classified by its StaticClassifyMesh / StaticClassifySpline tags, not by a classificator or a handler. */
+	bool bForcedByTag = false;
+
+	bool IsClaimedBy(const FName SlotId) const
+	{
+		return ClaimedSlots.Contains(SlotId);
+	}
+
+	/** Whether a handler that harvests from any actor may read its components: false once they travel with the actor. */
+	bool IsHarvestable() const
+	{
+		return !bRecreated;
+	}
 };
 
 /** Per-export handler scratch; the handler defines the concrete type, the writer owns the instance. */
@@ -235,16 +284,18 @@ private:
  * are stateless, const-only policies; per-export state lives in the writer's scratch.
  *
  * Harvest order per export (UPCGExDefaultLevelDataExporter):
- *   1. Claim pass: handlers by priority may claim a filtered actor; unclaimed actors fall to the
- *      exporter's built-in classification (Mesh / Actor / Level).
+ *   1. Claim pass: an actor's StaticClassifyMesh / StaticClassifySpline tags classify it outright; else
+ *      handlers by priority may claim it; unclaimed actors fall to the exporter's built-in classification
+ *      (Mesh and/or Spline, Actor, Level).
  *   2. Harvest pass: every handler sees every candidate (roots included, flagged: the subtree root and
- *      any IPCGExAssemblyRoot implementer inside the export) with its claimed slot, and appends items
+ *      any IPCGExAssemblyRoot implementer inside the export) with its claimed slots, and appends items
  *      to its own writer.
- *   3. Per slot: points emitted on PinName, entries handed off -- captured for shared compaction, or
- *      built into a per-entry embedded collection.
- * A handler must only parse candidates that will not be spawned as actors: the root, its own claims,
- * and content-bearing claims of other slots (meshes). Actor-claimed candidates travel as a class +
- * delta and already carry their components.
+ *   3. Per slot: points (or, without a collection, each item's data) emitted on PinName, entries handed
+ *      off -- captured for shared compaction, or built into a per-entry embedded collection.
+ * A slot either re-creates the actors it claims (bRecreatesSource: Actors, Levels), whose components then
+ * travel with them, or takes them apart and keeps only what it harvests (Meshes, Splines). A handler with
+ * its own classification harvests its own claims (IsClaimedBy); one that harvests from any actor reads only
+ * IsHarvestable() candidates.
  */
 UCLASS(Abstract)
 class PCGEXCOLLECTIONS_API UPCGExLevelExportHandler : public UObject
@@ -254,9 +305,14 @@ class PCGEXCOLLECTIONS_API UPCGExLevelExportHandler : public UObject
 public:
 #if WITH_EDITOR
 	virtual FPCGExExportSlotDesc GetSlotDesc() const PURE_VIRTUAL(UPCGExLevelExportHandler::GetSlotDesc, return FPCGExExportSlotDesc(););
-	virtual TSharedPtr<const IPCGExExportSlotPolicy> MakePolicy() const PURE_VIRTUAL(UPCGExLevelExportHandler::MakePolicy, return nullptr;);
 
-	/** Lower runs first -- claim order and pin emission order. Built-ins use 10/20/30. */
+	/** Required by a slot with a collection: registration refuses one without a policy. */
+	virtual TSharedPtr<const IPCGExExportSlotPolicy> MakePolicy() const
+	{
+		return nullptr;
+	}
+
+	/** Lower runs first -- claim order and pin emission order. Built-ins use 10/20/30/40. */
 	virtual int32 GetPriority() const
 	{
 		return 100;
@@ -277,6 +333,15 @@ public:
 
 	/** Per-point attributes beyond the generic ActorName / value tags. MetaEntries is parallel to Writer.Items. */
 	virtual void WriteItemAttributes(UPCGMetadata* Meta, TConstArrayView<int64> MetaEntries, const FPCGExExportSlotWriter& Writer, const UPCGExLevelDataExporter* Exporter) const
+	{
+	}
+
+	/**
+	 * Slots without a collection: finishes Data, the exporter's own copy of Writer.Items[ItemIndex].Data, already
+	 * outered to the exported asset. Runs after the generic ActorName and before value tags and data tags; a value tag
+	 * never overwrites a @Data attribute written here.
+	 */
+	virtual void FinalizeItemData(UPCGData* Data, int32 ItemIndex, const FPCGExExportSlotWriter& Writer, const UPCGExLevelDataExporter* Exporter) const
 	{
 	}
 

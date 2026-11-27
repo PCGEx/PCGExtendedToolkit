@@ -34,8 +34,12 @@
 #include "HAL/IConsoleManager.h"
 #include "Hash/Blake3.h"
 #include "Helpers/PCGExCollectionStagingPipeline.h"
+#include "Helpers/PCGExCollectionsHelpers.h"
+#include "IAssetTools.h"
+#include "Misc/ScopedSlowTask.h"
 #include "Serialization/MemoryWriter.h"
 #include "Serialization/ObjectAndNameAsStringProxyArchive.h"
+#include "UObject/GCObjectScopeGuard.h"
 #include "UObject/ICookInfo.h"
 #include "UObject/Script.h"
 #include "UObject/StructOnScope.h"
@@ -758,6 +762,30 @@ void FPCGExAssetCollectionEntry::EDITOR_GetSourceAssetPaths(TSet<FSoftObjectPath
 	if (Staging.Path.IsValid())
 	{
 		OutPaths.Emplace(Staging.Path);
+	}
+}
+
+void FPCGExAssetCollectionEntry::EDITOR_GetStagingLevelReads(TSet<FName>& OutLevelPackages) const
+{
+	if (bIsSubCollection)
+	{
+		return;
+	}
+
+	if (const FName WholeLevel = GetSourceLevelPath().GetLongPackageFName(); !WholeLevel.IsNone())
+	{
+		OutLevelPackages.Add(WholeLevel);
+	}
+
+	// An actor source path is a subobject of its map, OFPA included.
+	TSet<FSoftObjectPath> SourcePaths;
+	EDITOR_GetSourceAssetPaths(SourcePaths);
+	for (const FSoftObjectPath& Path : SourcePaths)
+	{
+		if (Path.IsSubobject())
+		{
+			OutLevelPackages.Add(Path.GetLongPackageFName());
+		}
 	}
 }
 
@@ -2529,7 +2557,7 @@ void UPCGExAssetCollection::EDITOR_SnapshotForComparison(TArray<uint8>& OutBytes
 	Serialize(Ar);
 }
 
-void UPCGExAssetCollection::EDITOR_RebuildStagingDataInternal(bool bRecursive)
+void UPCGExAssetCollection::EDITOR_RebuildStagingData()
 {
 	InvalidateCache();
 
@@ -2545,7 +2573,7 @@ void UPCGExAssetCollection::EDITOR_RebuildStagingDataInternal(bool bRecursive)
 
 	// Dirty on actual change, not on "a rebuild ran" -- else every project-wide rebuild rewrites
 	// every collection on disk. Undo snapshots happen per entry, so bailing here is safe.
-	int32 NumChanged = EDITOR_SanitizeAndRebuildStagingData(bRecursive);
+	int32 NumChanged = EDITOR_SanitizeAndRebuildStagingData(/*bRecursive=*/ false);
 	if (bIdsChanged)
 	{
 		NumChanged++;
@@ -2567,14 +2595,11 @@ void UPCGExAssetCollection::EDITOR_RebuildStagingDataInternal(bool bRecursive)
 	}
 }
 
-void UPCGExAssetCollection::EDITOR_RebuildStagingData()
-{
-	EDITOR_RebuildStagingDataInternal(false);
-}
-
 void UPCGExAssetCollection::EDITOR_RebuildStagingData_Recursive()
 {
-	EDITOR_RebuildStagingDataInternal(true);
+	// Not RebuildStagingData(true): its recursion gives subcollections a bare runtime restage and never dirties them.
+	UPCGExAssetCollection* Self = this;
+	EDITOR_RebuildStagingData_Batch(MakeArrayView(&Self, 1), /*bIncludeSubCollections=*/ true);
 }
 
 #pragma region Staleness
@@ -2981,7 +3006,297 @@ bool UPCGExAssetCollection::EDITOR_RebuildEntryStaging(int32 EntryIndex)
 	return bChanged;
 }
 
-void UPCGExAssetCollection::EDITOR_RebuildStagingData_Project()
+#pragma region Batch rebuild
+
+namespace PCGExAssetCollectionRebuildOrder
+{
+	/** Visits what Collection's staging reads: its subcollection rows, then, unless bSubCollectionsOnly, the collections
+	 *  its entries copy staging from. */
+	void ForEachDependency(const UPCGExAssetCollection* Collection, const bool bSubCollectionsOnly, TFunctionRef<void(UPCGExAssetCollection*)> Visitor)
+	{
+		TArray<const UPCGExAssetCollection*> Sources;
+		Collection->ForEachEntry([&Sources, &Visitor, bSubCollectionsOnly](const FPCGExAssetCollectionEntry* Entry, int32 /*Index*/)
+		{
+			if (!Entry)
+			{
+				return;
+			}
+
+			// The rows recursive staging follows: a ref parked on a toggled-off row is not one.
+			if (Entry->HasValidSubCollection())
+			{
+				Visitor(const_cast<UPCGExAssetCollection*>(Entry->GetSubCollectionPtr()));
+				return;
+			}
+
+			if (bSubCollectionsOnly)
+			{
+				return;
+			}
+
+			Sources.Reset();
+			Entry->EDITOR_GetStagingSourceCollections(Sources);
+			for (const UPCGExAssetCollection* Source : Sources)
+			{
+				if (Source)
+				{
+					Visitor(const_cast<UPCGExAssetCollection*>(Source));
+				}
+			}
+		});
+	}
+
+	/** Adds every subcollection Root reaches, at any depth, to Scope. */
+	void AddSubCollections(const UPCGExAssetCollection* Root, TSet<const UPCGExAssetCollection*>& Scope)
+	{
+		TSet<const UPCGExAssetCollection*> Visited;
+		Visited.Add(Root);
+		TArray<const UPCGExAssetCollection*> Stack;
+		Stack.Add(Root);
+
+		while (!Stack.IsEmpty())
+		{
+			const UPCGExAssetCollection* Current = Stack.Pop(EAllowShrinking::No);
+			ForEachDependency(Current, /*bSubCollectionsOnly=*/ true, [&Visited, &Stack, &Scope](UPCGExAssetCollection* SubCollection)
+			{
+				bool bAlreadyVisited = false;
+				Visited.Add(SubCollection, &bAlreadyVisited);
+				if (!bAlreadyVisited)
+				{
+					Scope.Add(SubCollection);
+					Stack.Add(SubCollection);
+				}
+			});
+		}
+	}
+
+	/** Post-order walk over every dependency: a collection is listed after everything it reads. Lists only collections in
+	 *  Scope and never enters one in Done. */
+	struct FWalk
+	{
+		const TSet<const UPCGExAssetCollection*>& Scope;
+		const TSet<const UPCGExAssetCollection*>* Done = nullptr;
+		TSet<const UPCGExAssetCollection*> Visited;
+		TArray<UPCGExAssetCollection*> Order;
+
+		explicit FWalk(const TSet<const UPCGExAssetCollection*>& InScope, const TSet<const UPCGExAssetCollection*>* InDone = nullptr)
+			: Scope(InScope), Done(InDone)
+		{
+		}
+
+		void Visit(UPCGExAssetCollection* Collection)
+		{
+			bool bAlreadyVisited = false;
+			Visited.Add(Collection, &bAlreadyVisited);
+			if (bAlreadyVisited || (Done && Done->Contains(Collection)))
+			{
+				return;
+			}
+
+			VisitDependencies(Collection);
+			if (Scope.Contains(Collection))
+			{
+				Order.Add(Collection);
+			}
+		}
+
+		void VisitDependencies(const UPCGExAssetCollection* Collection)
+		{
+			ForEachDependency(Collection, /*bSubCollectionsOnly=*/ false, [this](UPCGExAssetCollection* Dependency)
+			{
+				Visit(Dependency);
+			});
+		}
+	};
+
+	FText RebuildingText(const UPCGExAssetCollection* Collection)
+	{
+		return FText::Format(NSLOCTEXT("PCGEx", "RebuildingCollection", "Rebuilding '{0}'..."), FText::FromString(Collection->GetName()));
+	}
+
+	/** One batch: each collection rebuilt at most once, plus once more when its own hooks added dependencies. */
+	struct FBatchRun
+	{
+		FScopedSlowTask& SlowTask;
+		const bool bIncludeSubCollections;
+		TSet<const UPCGExAssetCollection*> Scope;
+		TSet<const UPCGExAssetCollection*> Ordered;
+		TSet<const UPCGExAssetCollection*> Done;
+		TSet<const UPCGExAssetCollection*> Changed;
+		UPCGExAssetCollection::FBatchRebuildResult Result;
+
+		FBatchRun(FScopedSlowTask& InSlowTask, const TArray<UPCGExAssetCollection*>& InOrder, const bool bInIncludeSubCollections)
+			: SlowTask(InSlowTask), bIncludeSubCollections(bInIncludeSubCollections)
+		{
+			for (const UPCGExAssetCollection* Collection : InOrder)
+			{
+				Scope.Add(Collection);
+				Ordered.Add(Collection);
+			}
+			Result.NumCollections = InOrder.Num();
+		}
+
+		void Rebuild(UPCGExAssetCollection* Collection)
+		{
+			bool bAlreadyDone = false;
+			Done.Add(Collection, &bAlreadyDone);
+			if (bAlreadyDone)
+			{
+				return;
+			}
+
+			if (!Collection->EDITOR_CanBeModified())
+			{
+				Result.NumSkipped++;
+				UE_LOG(LogPCGEx, Warning, TEXT("[PCGEx] Rebuild Staging: '%s' is read-only (cooked, or outside the writable folders) -- skipped."), *Collection->GetPathName());
+				return;
+			}
+
+			RunSession(Collection);
+			Result.NumRebuilt++;
+
+			// Dependencies its pipeline hooks added: those first, then this collection again so it reads them.
+			if (bIncludeSubCollections)
+			{
+				AddSubCollections(Collection, Scope);
+			}
+
+			FWalk Missing(Scope, &Done);
+			Missing.VisitDependencies(Collection);
+			if (Missing.Order.IsEmpty())
+			{
+				return;
+			}
+
+			const int32 NumRebuiltBefore = Result.NumRebuilt;
+			for (UPCGExAssetCollection* Dependency : Missing.Order)
+			{
+				if (!Ordered.Contains(Dependency))
+				{
+					Result.NumCollections++;
+				}
+				SlowTask.EnterProgressFrame(0.0f, RebuildingText(Dependency));
+				Rebuild(Dependency);
+			}
+
+			// Read-only dependencies kept their staging: nothing new to read.
+			if (Result.NumRebuilt > NumRebuiltBefore)
+			{
+				RunSession(Collection);
+			}
+		}
+
+		void RunSession(UPCGExAssetCollection* Collection)
+		{
+			const FDateTime PreviousRebuild = Collection->LastRebuiltUtc;
+			Collection->EDITOR_RebuildStagingData();
+			if (Collection->LastRebuiltUtc != PreviousRebuild)
+			{
+				Changed.Add(Collection);
+			}
+		}
+	};
+}
+
+TArray<UPCGExAssetCollection*> UPCGExAssetCollection::EDITOR_GetRebuildOrder(TConstArrayView<UPCGExAssetCollection*> InCollections, const bool bIncludeSubCollections)
+{
+	TSet<const UPCGExAssetCollection*> Scope;
+	for (const UPCGExAssetCollection* Collection : InCollections)
+	{
+		if (Collection)
+		{
+			Scope.Add(Collection);
+		}
+	}
+
+	if (bIncludeSubCollections)
+	{
+		for (const UPCGExAssetCollection* Collection : InCollections)
+		{
+			if (Collection)
+			{
+				PCGExAssetCollectionRebuildOrder::AddSubCollections(Collection, Scope);
+			}
+		}
+	}
+
+	PCGExAssetCollectionRebuildOrder::FWalk Walk(Scope);
+	for (UPCGExAssetCollection* Collection : InCollections)
+	{
+		if (Collection)
+		{
+			Walk.Visit(Collection);
+		}
+	}
+
+	return MoveTemp(Walk.Order);
+}
+
+UPCGExAssetCollection::FBatchRebuildResult UPCGExAssetCollection::EDITOR_RebuildStagingData_Batch(TConstArrayView<UPCGExAssetCollection*> InCollections, const bool bIncludeSubCollections)
+{
+	const TArray<UPCGExAssetCollection*> Order = EDITOR_GetRebuildOrder(InCollections, bIncludeSubCollections);
+	if (Order.IsEmpty())
+	{
+		return FBatchRebuildResult();
+	}
+
+	// The level releases below run garbage collections.
+	TGCObjectsScopeGuard<UPCGExAssetCollection> KeepAlive(Order);
+
+	// A level stays loaded until the last collection of the order that reads it is done.
+	TMap<FName, int32> LastReader;
+	for (int32 i = 0; i < Order.Num(); i++)
+	{
+		TSet<FName> Levels;
+		Order[i]->ForEachEntry([&Levels](const FPCGExAssetCollectionEntry* Entry, int32 /*Index*/)
+		{
+			if (Entry)
+			{
+				Entry->EDITOR_GetStagingLevelReads(Levels);
+			}
+		});
+
+		for (const FName& Level : Levels)
+		{
+			LastReader.Add(Level, i);
+		}
+	}
+
+	FScopedSlowTask SlowTask(static_cast<float>(Order.Num()), NSLOCTEXT("PCGEx", "RebuildingCollections", "Rebuilding collection staging..."));
+	SlowTask.MakeDialogDelayed(0.5f, /*bShowCancelButton=*/ true);
+
+	PCGExAssetCollectionRebuildOrder::FBatchRun Run(SlowTask, Order, bIncludeSubCollections);
+
+	for (int32 i = 0; i < Order.Num(); i++)
+	{
+		if (SlowTask.ShouldCancel())
+		{
+			Run.Result.bCancelled = true;
+			break;
+		}
+
+		SlowTask.EnterProgressFrame(1.0f, PCGExAssetCollectionRebuildOrder::RebuildingText(Order[i]));
+		Run.Rebuild(Order[i]);
+
+		TSet<FName> Keep;
+		for (const TPair<FName, int32>& Reader : LastReader)
+		{
+			if (Reader.Value > i)
+			{
+				Keep.Add(Reader.Key);
+			}
+		}
+		PCGExCollections::FlushLevelReadReleases(&Keep);
+	}
+
+	// What was kept for a later reader, a cancel included.
+	PCGExCollections::FlushLevelReadReleases();
+
+	Run.Result.NumChanged = Run.Changed.Num();
+	return Run.Result;
+}
+
+TArray<UPCGExAssetCollection*> UPCGExAssetCollection::EDITOR_LoadProjectCollections()
 {
 	const FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
 	const IAssetRegistry& AssetRegistry = AssetRegistryModule.Get();
@@ -2993,14 +3308,49 @@ void UPCGExAssetCollection::EDITOR_RebuildStagingData_Project()
 	TArray<FAssetData> AssetDataList;
 	AssetRegistry.GetAssets(Filter, AssetDataList);
 
-	for (const FAssetData& AssetData : AssetDataList)
+	TArray<UPCGExAssetCollection*> Collections;
+	Collections.Reserve(AssetDataList.Num());
 	{
-		if (UPCGExAssetCollection* Collection = Cast<UPCGExAssetCollection>(AssetData.GetAsset()))
+		FScopedSlowTask LoadTask(static_cast<float>(AssetDataList.Num()), NSLOCTEXT("PCGEx", "LoadingCollections", "Loading collections..."));
+		LoadTask.MakeDialogDelayed(0.5f);
+
+		for (const FAssetData& AssetData : AssetDataList)
 		{
-			Collection->EDITOR_RebuildStagingData();
+			LoadTask.EnterProgressFrame(1.0f);
+			if (UPCGExAssetCollection* Collection = Cast<UPCGExAssetCollection>(AssetData.GetAsset()))
+			{
+				Collections.Add(Collection);
+			}
 		}
 	}
+
+	return Collections;
 }
+
+void UPCGExAssetCollection::EDITOR_RebuildStagingData_Project()
+{
+	// The registry already lists every collection asset.
+	const TArray<UPCGExAssetCollection*> Collections = EDITOR_LoadProjectCollections();
+	EDITOR_RebuildStagingData_Batch(Collections, /*bIncludeSubCollections=*/ false);
+}
+
+bool UPCGExAssetCollection::EDITOR_CanBeModified() const
+{
+	// Nothing on disk to refuse.
+	if (HasAnyFlags(RF_Transient) || GetPackage() == GetTransientPackage())
+	{
+		return true;
+	}
+
+	return EDITOR_CanBeModified(FAssetData(this, FAssetData::ECreationFlags::SkipAssetRegistryTagsGathering));
+}
+
+bool UPCGExAssetCollection::EDITOR_CanBeModified(const FAssetData& InAssetData)
+{
+	return !IAssetTools::Get().IsAssetReadOnly(InAssetData);
+}
+
+#pragma endregion
 
 int32 UPCGExAssetCollection::EDITOR_SanitizeAndRebuildStagingData(bool bRecursive)
 {

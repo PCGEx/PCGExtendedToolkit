@@ -75,6 +75,8 @@ public class PCGExCollections : ModuleRules
 					"SlateCore",
 					// FBSPOps, for the brush delta extension.
 					"BSPUtils",
+					// IAssetTools::IsAssetReadOnly, for the batch rebuild's writability test.
+					"AssetTools",
 				});
 		}
 	}

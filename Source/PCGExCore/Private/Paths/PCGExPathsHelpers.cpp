@@ -112,6 +112,15 @@ namespace PCGExPaths
 			return InSpline->GetTransformAtSplineInputKey(InSpline->FindInputKeyClosestToWorldLocation(InLocation), ESplineCoordinateSpace::World, bUseScale);
 		}
 
+		void SetSplineTransform(UPCGSplineData* InData, const FTransform& InTransform)
+		{
+			// Moved out, not copied: Initialize assigns its argument before it reads the struct.
+			FPCGSplineStruct Struct = MoveTemp(InData->SplineStruct);
+			Struct.Transform = InTransform;
+			Struct.Bounds = Struct.LocalBounds.TransformBy(InTransform);
+			InData->Initialize(Struct);
+		}
+
 		TSharedPtr<FPCGSplineStruct> MakeSplineFromPoints(const TConstPCGValueRange<FTransform>& InTransforms, const EPCGExSplinePointTypeRedux InPointType, const bool bClosedLoop, const bool bSmoothLinear)
 		{
 			const int32 NumPoints = InTransforms.Num();

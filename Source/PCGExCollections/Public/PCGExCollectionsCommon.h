@@ -209,8 +209,12 @@ namespace PCGExCollections::Labels
 	const FName MeshesPin = TEXT("Meshes");
 	const FName ActorsPin = TEXT("Actors");
 	const FName LevelsPin = TEXT("Levels");
-	
+	const FName SplinesPin = TEXT("Splines");
+
+	// Level-export system tags, read on actors only and never exported as data.
 	const FName StaticIgnore = TEXT("StaticIgnore");
+	const FName StaticClassifyMesh = TEXT("StaticClassifyMesh");
+	const FName StaticClassifySpline = TEXT("StaticClassifySpline");
 }
 
 namespace PCGExCollections

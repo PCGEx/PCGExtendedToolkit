@@ -23,6 +23,7 @@
 #include "ScopedTransaction.h"
 #include "Core/PCGExAssetCollection.h"
 #include "Core/PCGExAssetCollectionTypes.h"
+#include "Details/Collections/PCGExCollectionEditorHelpers.h"
 #include "Details/Collections/PCGExCollectionEditorTypeRegistry.h"
 #include "Details/Collections/PCGExCollectionEditorUtils.h"
 #include "Details/Collections/PCGExCollectionCategoryGroups.h"
@@ -702,6 +703,7 @@ void FPCGExAssetCollectionEditor::BuildEditorToolbar(FToolBarBuilder& ToolbarBui
 			PCGEX_SLATE_ICON(RebuildStaging)
 			);
 
+		// Batch rebuilds: reported in a notification, unavailable during PIE.
 		ToolbarBuilder.AddToolBarButton(
 			FUIAction(
 				FExecuteAction::CreateLambda(
@@ -709,9 +711,10 @@ void FPCGExAssetCollectionEditor::BuildEditorToolbar(FToolBarBuilder& ToolbarBui
 					{
 						PCGEX_CURRENT_COLLECTION
 						{
-							Collection->EDITOR_RebuildStagingData_Recursive();
+							PCGExCollectionEditorHelpers::RebuildLoadedCollections(MakeArrayView(&Collection, 1), /*bIncludeSubCollections=*/ true);
 						}
-					})
+					}),
+				FCanExecuteAction::CreateStatic(&PCGExCollectionEditorHelpers::CanRebuildCollections)
 				),
 			NAME_None,
 			FText::GetEmpty(),
@@ -722,13 +725,12 @@ void FPCGExAssetCollectionEditor::BuildEditorToolbar(FToolBarBuilder& ToolbarBui
 		ToolbarBuilder.AddToolBarButton(
 			FUIAction(
 				FExecuteAction::CreateLambda(
-					[this]()
+					[]()
 					{
-						PCGEX_CURRENT_COLLECTION
-						{
-							Collection->EDITOR_RebuildStagingData_Project();
-						}
-					})
+						const TArray<UPCGExAssetCollection*> Collections = UPCGExAssetCollection::EDITOR_LoadProjectCollections();
+						PCGExCollectionEditorHelpers::RebuildLoadedCollections(Collections, /*bIncludeSubCollections=*/ false);
+					}),
+				FCanExecuteAction::CreateStatic(&PCGExCollectionEditorHelpers::CanRebuildCollections)
 				),
 			NAME_None,
 			FText::GetEmpty(),
