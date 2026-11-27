@@ -648,9 +648,9 @@ void FPCGExCollectionsEditorModule::RegisterMenuExtensions()
 					{
 						return;
 					}
-					if (UContentBrowserAssetContextMenuContext* AssetMenuContext = ToolMenu->Context.FindContext<UContentBrowserAssetContextMenuContext>())
+					if (const UContentBrowserAssetContextMenuContext* AssetMenuContext = ToolMenu->Context.FindContext<UContentBrowserAssetContextMenuContext>())
 					{
-						PCGExCollectionsEditorMenuUtils::CreateOrUpdatePCGExAssetCollectionsFromMenu(ToolMenu, AssetMenuContext->SelectedAssets);
+						PCGExCollectionsEditorMenuUtils::ExtendAssetActionsMenu(ToolMenu, *AssetMenuContext);
 					}
 				}), FToolMenuInsert(NAME_None, EToolMenuInsertType::Default));
 	}

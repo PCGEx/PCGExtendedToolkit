@@ -1707,12 +1707,17 @@ namespace PCGExCollections
 			UE_LOG(LogPCGEx, Log, TEXT("[PCGEx] Released %d level(s) loaded for staging."), PackagesToUnload.Num());
 		}
 
-		bool ReleaseTick(float DeltaTime)
+		void ReleasePending()
 		{
-			ReleaseTickerHandle.Reset();
 			const TSet<FName> Batch = MoveTemp(PendingPackages);
 			PendingPackages.Reset();
 			Release(Batch);
+		}
+
+		bool ReleaseTick(float DeltaTime)
+		{
+			ReleaseTickerHandle.Reset();
+			ReleasePending();
 			return false;
 		}
 	}
@@ -1749,6 +1754,21 @@ namespace PCGExCollections
 		// Not the streamable manager: its item would hold the world until the next garbage collection (see LevelReadRelease).
 		Path.TryLoad();
 		return nullptr;
+	}
+
+	void FlushLevelReadReleases()
+	{
+#if WITH_EDITOR
+		if (!ensure(IsInGameThread()) || LevelReadRelease::PendingPackages.IsEmpty())
+		{
+			return;
+		}
+
+		// Released here instead: the scheduled tick would find nothing left.
+		FTSTicker::RemoveTicker(LevelReadRelease::ReleaseTickerHandle);
+		LevelReadRelease::ReleaseTickerHandle.Reset();
+		LevelReadRelease::ReleasePending();
+#endif
 	}
 
 	void CancelPendingLevelReleases()

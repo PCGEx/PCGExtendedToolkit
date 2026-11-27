@@ -79,6 +79,13 @@ namespace PCGExCollections
 	 */
 	PCGEXCOLLECTIONS_API void TrackLevelRead(FName LevelPackageName);
 
+	/**
+	 * Runs the pending level release now instead of on the next tick, for a batch that restages collections back to back
+	 * in one frame. Call it between two rebuilds, never inside a load, a property edit or a garbage collection: unloading
+	 * runs garbage collections. Game thread only; no-op when nothing is pending.
+	 */
+	PCGEXCOLLECTIONS_API void FlushLevelReadReleases();
+
 	/** Drops pending and retried level releases without unloading anything (module shutdown). */
 	PCGEXCOLLECTIONS_API void CancelPendingLevelReleases();
 

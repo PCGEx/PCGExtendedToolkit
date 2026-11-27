@@ -44,6 +44,12 @@ namespace PCGExCollectionEditorHelpers
 	 */
 	PCGEXCOLLECTIONSEDITOR_API void MergeCollectionsIntoOmni(const TArray<FAssetData>& SelectedCollections);
 
+	/**
+	 * Load the selected collections and rebuild their staging through UPCGExAssetCollection::EDITOR_RebuildStagingData_Batch,
+	 * then report the outcome in a notification. Rebuilt collections are left unsaved.
+	 */
+	PCGEXCOLLECTIONSEDITOR_API void RebuildCollections(const TArray<FAssetData>& SelectedCollections, bool bIncludeSubCollections);
+
 	/** Append the given source assets to each selected collection. */
 	PCGEXCOLLECTIONSEDITOR_API void UpdateCollectionsFromTyped(
 		const TArray<TObjectPtr<UPCGExAssetCollection>>& SelectedCollections,

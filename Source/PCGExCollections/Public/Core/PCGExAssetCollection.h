@@ -1234,11 +1234,37 @@ public:
 	UFUNCTION()
 	virtual void EDITOR_RebuildStagingData();
 
+	/** This collection and every subcollection it reaches, each rebuilt once, through EDITOR_RebuildStagingData_Batch. */
 	UFUNCTION()
 	virtual void EDITOR_RebuildStagingData_Recursive();
 
+	/** Every collection asset in the project, through EDITOR_RebuildStagingData_Batch. */
 	UFUNCTION()
 	virtual void EDITOR_RebuildStagingData_Project();
+
+	/** Outcome of EDITOR_RebuildStagingData_Batch. NumRebuilt < NumCollections when the user cancelled. */
+	struct FBatchRebuildResult
+	{
+		/** Collections in the rebuild order. */
+		int32 NumCollections = 0;
+		int32 NumRebuilt = 0;
+		/** Rebuilt collections whose rebuild changed something (LastRebuiltUtc moved). */
+		int32 NumChanged = 0;
+	};
+
+	/**
+	 * InCollections in rebuild order: each once, after every subcollection it reaches (the walk crosses collections not in
+	 * InCollections too). bIncludeSubCollections also lists every reached subcollection. Nulls are skipped; a cycle is
+	 * broken where it closes.
+	 */
+	static TArray<UPCGExAssetCollection*> EDITOR_GetRebuildOrder(TConstArrayView<UPCGExAssetCollection*> InCollections, bool bIncludeSubCollections);
+
+	/**
+	 * EDITOR_RebuildStagingData on every collection of EDITOR_GetRebuildOrder, under a cancellable progress dialog. The
+	 * levels a collection read for staging are released before the next one starts, so a batch never holds more of them
+	 * than a single rebuild does.
+	 */
+	static FBatchRebuildResult EDITOR_RebuildStagingData_Batch(TConstArrayView<UPCGExAssetCollection*> InCollections, bool bIncludeSubCollections);
 
 	/** Sanitize + re-stage every entry. Returns the number that actually changed. */
 	int32 EDITOR_SanitizeAndRebuildStagingData(bool bRecursive);
@@ -1406,9 +1432,6 @@ protected:
 	 *  (no dirty), leaving the dirty decision to the caller. Diffs via CompareScriptStruct rather
 	 *  than a serialize round-trip so object refs survive; undiffable rows report changed. */
 	bool EDITOR_RestageEntryIfChanged(FPCGExAssetCollectionEntry* InEntry, int32 EntryIndex, bool bRecursive);
-
-	/** Shared body of EDITOR_RebuildStagingData / _Recursive. */
-	void EDITOR_RebuildStagingDataInternal(bool bRecursive);
 
 	/** Whole-object state as bytes for before/after comparison -- catches collection-level
 	 *  mutations by pipeline hooks. Refs written as paths so pointer churn doesn't count. */

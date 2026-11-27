@@ -34,8 +34,11 @@
 #include "HAL/IConsoleManager.h"
 #include "Hash/Blake3.h"
 #include "Helpers/PCGExCollectionStagingPipeline.h"
+#include "Helpers/PCGExCollectionsHelpers.h"
+#include "Misc/ScopedSlowTask.h"
 #include "Serialization/MemoryWriter.h"
 #include "Serialization/ObjectAndNameAsStringProxyArchive.h"
+#include "UObject/GCObjectScopeGuard.h"
 #include "UObject/ICookInfo.h"
 #include "UObject/Script.h"
 #include "UObject/StructOnScope.h"
@@ -2529,7 +2532,7 @@ void UPCGExAssetCollection::EDITOR_SnapshotForComparison(TArray<uint8>& OutBytes
 	Serialize(Ar);
 }
 
-void UPCGExAssetCollection::EDITOR_RebuildStagingDataInternal(bool bRecursive)
+void UPCGExAssetCollection::EDITOR_RebuildStagingData()
 {
 	InvalidateCache();
 
@@ -2545,7 +2548,7 @@ void UPCGExAssetCollection::EDITOR_RebuildStagingDataInternal(bool bRecursive)
 
 	// Dirty on actual change, not on "a rebuild ran" -- else every project-wide rebuild rewrites
 	// every collection on disk. Undo snapshots happen per entry, so bailing here is safe.
-	int32 NumChanged = EDITOR_SanitizeAndRebuildStagingData(bRecursive);
+	int32 NumChanged = EDITOR_SanitizeAndRebuildStagingData(/*bRecursive=*/ false);
 	if (bIdsChanged)
 	{
 		NumChanged++;
@@ -2567,14 +2570,11 @@ void UPCGExAssetCollection::EDITOR_RebuildStagingDataInternal(bool bRecursive)
 	}
 }
 
-void UPCGExAssetCollection::EDITOR_RebuildStagingData()
-{
-	EDITOR_RebuildStagingDataInternal(false);
-}
-
 void UPCGExAssetCollection::EDITOR_RebuildStagingData_Recursive()
 {
-	EDITOR_RebuildStagingDataInternal(true);
+	// Not RebuildStagingData(true): its recursion gives subcollections a bare runtime restage and never dirties them.
+	UPCGExAssetCollection* Self = this;
+	EDITOR_RebuildStagingData_Batch(MakeArrayView(&Self, 1), /*bIncludeSubCollections=*/ true);
 }
 
 #pragma region Staleness
@@ -2981,6 +2981,109 @@ bool UPCGExAssetCollection::EDITOR_RebuildEntryStaging(int32 EntryIndex)
 	return bChanged;
 }
 
+#pragma region Batch rebuild
+
+namespace PCGExAssetCollectionRebuildOrder
+{
+	/** Post-order walk over subcollection entries: a collection is listed after everything it reaches. */
+	struct FWalk
+	{
+		TSet<const UPCGExAssetCollection*> Requested;
+		TSet<const UPCGExAssetCollection*> Visited;
+		TArray<UPCGExAssetCollection*> Order;
+		bool bIncludeSubCollections = false;
+
+		void Visit(UPCGExAssetCollection* Collection)
+		{
+			bool bAlreadyVisited = false;
+			Visited.Add(Collection, &bAlreadyVisited);
+			if (bAlreadyVisited)
+			{
+				return;
+			}
+
+			// The entries recursive staging follows: a ref parked on a toggled-off entry is not one.
+			Collection->ForEachEntry([this](const FPCGExAssetCollectionEntry* Entry, int32 /*Index*/)
+			{
+				if (Entry && Entry->HasValidSubCollection())
+				{
+					Visit(const_cast<UPCGExAssetCollection*>(Entry->GetSubCollectionPtr()));
+				}
+			});
+
+			if (bIncludeSubCollections || Requested.Contains(Collection))
+			{
+				Order.Add(Collection);
+			}
+		}
+	};
+}
+
+TArray<UPCGExAssetCollection*> UPCGExAssetCollection::EDITOR_GetRebuildOrder(TConstArrayView<UPCGExAssetCollection*> InCollections, const bool bIncludeSubCollections)
+{
+	PCGExAssetCollectionRebuildOrder::FWalk Walk;
+	Walk.bIncludeSubCollections = bIncludeSubCollections;
+
+	for (const UPCGExAssetCollection* Collection : InCollections)
+	{
+		if (Collection)
+		{
+			Walk.Requested.Add(Collection);
+		}
+	}
+
+	for (UPCGExAssetCollection* Collection : InCollections)
+	{
+		if (Collection)
+		{
+			Walk.Visit(Collection);
+		}
+	}
+
+	return MoveTemp(Walk.Order);
+}
+
+UPCGExAssetCollection::FBatchRebuildResult UPCGExAssetCollection::EDITOR_RebuildStagingData_Batch(TConstArrayView<UPCGExAssetCollection*> InCollections, const bool bIncludeSubCollections)
+{
+	const TArray<UPCGExAssetCollection*> Order = EDITOR_GetRebuildOrder(InCollections, bIncludeSubCollections);
+
+	FBatchRebuildResult Result;
+	Result.NumCollections = Order.Num();
+	if (Order.IsEmpty())
+	{
+		return Result;
+	}
+
+	// Every level release below runs garbage collections.
+	TGCObjectsScopeGuard<UPCGExAssetCollection> KeepAlive(Order);
+
+	FScopedSlowTask SlowTask(static_cast<float>(Order.Num()), NSLOCTEXT("PCGEx", "RebuildingCollections", "Rebuilding collection staging..."));
+	SlowTask.MakeDialogDelayed(0.5f, /*bShowCancelButton=*/ true);
+
+	for (UPCGExAssetCollection* Collection : Order)
+	{
+		if (SlowTask.ShouldCancel())
+		{
+			break;
+		}
+
+		SlowTask.EnterProgressFrame(1.0f, FText::Format(NSLOCTEXT("PCGEx", "RebuildingCollection", "Rebuilding '{0}'..."), FText::FromString(Collection->GetName())));
+
+		const FDateTime PreviousRebuild = Collection->LastRebuiltUtc;
+		Collection->EDITOR_RebuildStagingData();
+		Result.NumRebuilt++;
+		if (Collection->LastRebuiltUtc != PreviousRebuild)
+		{
+			Result.NumChanged++;
+		}
+
+		// Level reads unload on the next tick, and the whole batch runs in this one.
+		PCGExCollections::FlushLevelReadReleases();
+	}
+
+	return Result;
+}
+
 void UPCGExAssetCollection::EDITOR_RebuildStagingData_Project()
 {
 	const FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
@@ -2993,14 +3096,27 @@ void UPCGExAssetCollection::EDITOR_RebuildStagingData_Project()
 	TArray<FAssetData> AssetDataList;
 	AssetRegistry.GetAssets(Filter, AssetDataList);
 
-	for (const FAssetData& AssetData : AssetDataList)
+	TArray<UPCGExAssetCollection*> Collections;
+	Collections.Reserve(AssetDataList.Num());
 	{
-		if (UPCGExAssetCollection* Collection = Cast<UPCGExAssetCollection>(AssetData.GetAsset()))
+		FScopedSlowTask LoadTask(static_cast<float>(AssetDataList.Num()), NSLOCTEXT("PCGEx", "LoadingCollections", "Loading collections..."));
+		LoadTask.MakeDialogDelayed(0.5f);
+
+		for (const FAssetData& AssetData : AssetDataList)
 		{
-			Collection->EDITOR_RebuildStagingData();
+			LoadTask.EnterProgressFrame(1.0f);
+			if (UPCGExAssetCollection* Collection = Cast<UPCGExAssetCollection>(AssetData.GetAsset()))
+			{
+				Collections.Add(Collection);
+			}
 		}
 	}
+
+	// The registry already lists every collection asset.
+	EDITOR_RebuildStagingData_Batch(Collections, /*bIncludeSubCollections=*/ false);
 }
+
+#pragma endregion
 
 int32 UPCGExAssetCollection::EDITOR_SanitizeAndRebuildStagingData(bool bRecursive)
 {
